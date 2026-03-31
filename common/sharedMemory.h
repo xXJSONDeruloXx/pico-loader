@@ -10,6 +10,10 @@
 #define MAIN_MEMORY_CMD_NONE            0
 #define MAIN_MEMORY_CMD_SAVE_STATE_DUMP 0x5354
 
+#define SAVE_STATE_ARM9_CONTEXT_ADDRESS  0x023FF000
+#define SAVE_STATE_ARM7_CONTEXT_ADDRESS  0x023FF080
+#define SAVE_STATE_CONTEXT_MAGIC         0x43545831u
+
 struct shared_memory_multi_boot_info_t
 {
     u16 bootType;

@@ -16,6 +16,7 @@
 #include "patches/arm7/sdk5/Sdk5DsiSdCardRedirectPatch.h"
 #include "patches/arm7/PokemonDownloaderArm7Patch.h"
 #include "patches/arm7/cheats/CheatEnginePatch.h"
+#include "patches/arm7/cheats/HotkeyStateCapturePatchCode.h"
 #include "Arm7Patcher.h"
 
 static u32 correctAddress(u32 address, const nds_header_ntr_t* romHeader)
@@ -106,9 +107,17 @@ void* Arm7Patcher::ApplyPatches(const LoaderPlatform* loaderPlatform, u32 cheats
             mainMemoryArenaLo += cheatsLength;
         }
 
-        if (cheatsPtr != nullptr || hotkeyResetArm7Function != nullptr)
+        const void* hotkeyCaptureFunction = nullptr;
+        if (hotkeyResetArm7Function != nullptr)
         {
-            patchCollection.AddPatch(new CheatEnginePatch(cheatsPtr, hotkeyResetArm7Function));
+            auto hotkeyCapturePatchCode = patchContext.GetPatchCodeCollection().AddUniquePatchCode<HotkeyStateCapturePatchCode>(
+                patchContext.GetPatchHeap());
+            hotkeyCaptureFunction = hotkeyCapturePatchCode->GetFunction();
+        }
+
+        if (cheatsPtr != nullptr || hotkeyCaptureFunction != nullptr)
+        {
+            patchCollection.AddPatch(new CheatEnginePatch(cheatsPtr, hotkeyCaptureFunction));
         }
 
         if (romHeader->unitCode == 0) // seems only present on NITRO, not on HYBRID or LIMITED

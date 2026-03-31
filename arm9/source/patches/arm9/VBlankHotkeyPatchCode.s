@@ -22,6 +22,35 @@ patch_vblankhotkey_handler:
     mov r0, #1
     str r0, [r2]
 
+    ldr r0, contextAddress
+    ldr r1, contextMagic
+    str r1, [r0], #4
+    mrs r1, cpsr
+    str r1, [r0], #4
+    mrs r1, spsr
+    str r1, [r0], #4
+    mov r1, sp
+    str r1, [r0], #4
+    ldr r1, [sp, #16]
+    str r1, [r0], #4
+    ldr r1, [sp, #0]
+    str r1, [r0], #4
+    ldr r1, [sp, #4]
+    str r1, [r0], #4
+    ldr r1, [sp, #8]
+    str r1, [r0], #4
+    ldr r1, [sp, #12]
+    str r1, [r0], #4
+    str r4, [r0], #4
+    str r5, [r0], #4
+    str r6, [r0], #4
+    str r7, [r0], #4
+    str r8, [r0], #4
+    str r9, [r0], #4
+    str r10, [r0], #4
+    str r11, [r0], #4
+    str r12, [r0], #4
+
     ldr r0, sdk5MainMemoryCmdAddress
     mov r1, #0x54
     orr r1, r1, #0x5300
@@ -51,6 +80,12 @@ sdk5MainMemoryCmdAddress:
 
 ntrMainMemoryCmdAddress:
     .word 0x027FFFFC
+
+contextAddress:
+    .word 0x023FF000
+
+contextMagic:
+    .word 0x43545831
 
 hotkeyMask:
     .word 0x30C

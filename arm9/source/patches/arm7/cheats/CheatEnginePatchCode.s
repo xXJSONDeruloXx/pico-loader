@@ -39,7 +39,11 @@ cheatengine_entry:
 
     movs r0, #1
     strb r0, [r2]
+    adr r0, hotkey_return
+    adds r0, #1
+    mov lr, r0
     bx r3
+hotkey_return:
 
 hotkey_not_pressed:
     adr r2, hotkeyPressedState

@@ -173,7 +173,7 @@ static void handleApplyArm9PatchesCommand()
 static void handleApplyArm7PatchesCommand(u32 cheatsLength)
 {
     void* cheats = nullptr;
-    void* patchSpaceStart = Arm7Patcher().ApplyPatches(sLoaderPlatform, cheatsLength, nullptr, cheats);
+    void* patchSpaceStart = Arm7Patcher().ApplyPatches(sLoaderPlatform, cheatsLength, sHotkeyResetArm7Function, cheats);
     if (sSoftResetCheatsPointer != nullptr)
     {
         *sSoftResetCheatsPointer = cheats;
