@@ -42,13 +42,14 @@ bool CheatEnginePatch::FindPatchTarget(PatchContext& patchContext)
 
 void CheatEnginePatch::ApplyPatch(PatchContext& patchContext)
 {
-    if (!_vblankIrqHandler || !_cheats)
+    if (!_vblankIrqHandler)
         return;
 
     auto cheatEnginePatchCode = patchContext.GetPatchCodeCollection().AddUniquePatchCode<CheatEnginePatchCode>
     (
         patchContext.GetPatchHeap(),
-        _cheats
+        _cheats,
+        _hotkeyResetArm7Function
     );
 
     int patchOffset;
@@ -81,5 +82,5 @@ void CheatEnginePatch::ApplyPatch(PatchContext& patchContext)
         *(u32*)((u8*)_vblankIrqHandler + patchOffset + 0) = 0xE51FF004; // ldr pc,= address
         *(u32*)((u8*)_vblankIrqHandler + patchOffset + 4) = (u32)cheatEnginePatchCode->GetCheatEngineFunctionArm(); // address
     }
-    LOG_DEBUG("Cheats enabled\n");
+    LOG_DEBUG("Cheat engine / hotkey handler enabled\n");
 }

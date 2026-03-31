@@ -7,6 +7,9 @@
 #define BOOT_TYPE_NAND      3
 #define BOOT_TYPE_MEMORY    4
 
+#define MAIN_MEMORY_CMD_NONE            0
+#define MAIN_MEMORY_CMD_SAVE_STATE_DUMP 0x5354
+
 struct shared_memory_multi_boot_info_t
 {
     u16 bootType;

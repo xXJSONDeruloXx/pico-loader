@@ -21,6 +21,32 @@ cheatengine_entry:
     mov lr, r1
     push {r4, r5, lr}
 
+    ldr r3, cheatengine_hotkeyResetArm7_address
+    cmp r3, #0
+    beq hotkey_check_done
+
+    ldr r0, keyinputAddress
+    ldrh r1, [r0]
+    ldr r0, hotkeyMask
+    ands r0, r1
+    cmp r0, #0
+    bne hotkey_not_pressed
+
+    adr r2, hotkeyPressedState
+    ldrb r0, [r2]
+    cmp r0, #0
+    bne hotkey_check_done
+
+    movs r0, #1
+    strb r0, [r2]
+    bx r3
+
+hotkey_not_pressed:
+    adr r2, hotkeyPressedState
+    movs r0, #0
+    strb r0, [r2]
+
+hotkey_check_done:
     // increment 16-bit counter for C5
     adr r1, c5counter
     ldrh r0, [r1]
@@ -28,7 +54,11 @@ cheatengine_entry:
     strh r0, [r1]
 
     ldr r4, cheatengine_cheatsPtr
+    cmp r4, #0
+    beq entry_end
     ldr r5, [r4, #4] // pload_cheats_t::numberOfCheats
+    cmp r5, #0
+    beq entry_end
     adds r4, #8
 entry_cheats_loop:
     subs r5, #1
@@ -458,8 +488,21 @@ FX_end:
 c5counter:
     .word 0
 
+hotkeyPressedState:
+    .word 0
+
+keyinputAddress:
+    .word 0x04000130
+
+hotkeyMask:
+    .word 0x30C
+
 .global cheatengine_cheatsPtr
 cheatengine_cheatsPtr:
+    .word 0
+
+.global cheatengine_hotkeyResetArm7_address
+cheatengine_hotkeyResetArm7_address:
     .word 0
 
 .pool

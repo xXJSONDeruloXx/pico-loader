@@ -1,4 +1,5 @@
 #include "common.h"
+#include <string.h>
 #include "ApList.h"
 #include <libtwl/gfx/gfx3d.h>
 #include <libtwl/gfx/gfx3dCmd.h>
@@ -29,6 +30,7 @@
 #include "jumpToArm9EntryPoint.h"
 #include "patches/homebrew/BootstubPatchCode.h"
 #include "HomebrewBootstub.h"
+#include "../../include/picoLoader7.h"
 
 #define HANDSHAKE_PART0     0xA
 #define HANDSHAKE_PART1     0xB
@@ -48,6 +50,7 @@ static u32 sRomDirSectorOffset;
 static u16 sIsCloneBootRom;
 static loader_info_t sLoaderInfo;
 static void** sSoftResetCheatsPointer = nullptr;
+static const void* sHotkeyResetArm7Function = nullptr;
 
 u16 gIsDsiMode;
 
@@ -148,19 +151,29 @@ static void handleClearMainMemCommand()
 
 static void handleApplyArm9PatchesCommand()
 {
+    const char* launcherPath = nullptr;
+    auto loaderHeader = (const pload_header7_t*)0x06840000;
+    if (loaderHeader->apiVersion >= 2 && loaderHeader->v2.launcherPath[0] != 0)
+    {
+        launcherPath = loaderHeader->v2.launcherPath;
+    }
+
     auto result = Arm9Patcher().ApplyPatches(
         sLoaderPlatform,
         sApListEntry.GetGameCode() == 0 ? nullptr : &sApListEntry,
         sIsCloneBootRom,
-        &sLoaderInfo);
+        &sLoaderInfo,
+        launcherPath,
+        loaderHeader->loadParams.romPath);
     sSoftResetCheatsPointer = result.softResetCheatsPointer;
+    sHotkeyResetArm7Function = result.hotkeyResetArm7Function;
     ipc_sendWordDirect(1);
 }
 
 static void handleApplyArm7PatchesCommand(u32 cheatsLength)
 {
     void* cheats = nullptr;
-    void* patchSpaceStart = Arm7Patcher().ApplyPatches(sLoaderPlatform, cheatsLength, cheats);
+    void* patchSpaceStart = Arm7Patcher().ApplyPatches(sLoaderPlatform, cheatsLength, nullptr, cheats);
     if (sSoftResetCheatsPointer != nullptr)
     {
         *sSoftResetCheatsPointer = cheats;
@@ -255,9 +268,11 @@ static void handleSetupHomebrewBootstub(u32 dldiRequiredSpace)
 
     void* dldi = patchHeap.Alloc(dldiRequiredSpace);
     char* launcherPath = (char*)patchHeap.Alloc(256);
+    char* saveStatePath = (char*)patchHeap.Alloc(256);
+    memset(saveStatePath, 0, 256);
 
     auto bootstubPatchCode = patchCodeCollection.AddUniquePatchCode<BootstubPatchCode>(
-        patchHeap, dldi, launcherPath, &sLoaderInfo,
+        patchHeap, dldi, launcherPath, saveStatePath, &sLoaderInfo,
         sLoaderPlatform->CreateSdReadPatchCode(patchCodeCollection, patchHeap));
 
     HOMEBREW_BOOTSTUB->bootSig = HOMEBREW_BOOTSTUB_BOOTSIG;

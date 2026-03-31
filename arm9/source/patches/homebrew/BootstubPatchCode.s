@@ -89,6 +89,17 @@ arm9_after_arm7_sync:
     subs r1, r1, #4
     bne 1b
 
+    // set loadParams->savePath
+    ldr r0, patch_bootstub_arm9reboot_savestate_path
+    mov r1, #256
+    add r3, r7, #0x100
+    add r3, #0xC
+1:
+    ldr r2, [r0], #4
+    str r2, [r3], #4
+    subs r1, r1, #4
+    bne 1b
+
     // map vram CD to arm7
     ldr r0,= 0x04000240
     ldr r1,= 0x8A82
@@ -134,6 +145,10 @@ patch_bootstub_arm9reboot_dldi_address:
 
 .global patch_bootstub_arm9reboot_launcher_path
 patch_bootstub_arm9reboot_launcher_path:
+    .word 0
+
+.global patch_bootstub_arm9reboot_savestate_path
+patch_bootstub_arm9reboot_savestate_path:
     .word 0
 
 .global patch_bootstub_arm9reboot_loader_info

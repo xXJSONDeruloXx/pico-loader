@@ -92,6 +92,24 @@ static bool mountAgbSemihosting()
 
 extern "C" void __libc_init_array();
 
+static constexpr const char* sSaveStateArgumentPrefix = "__pico_state=";
+
+static const char* extractSaveStatePathFromArguments(u32& argumentsLength)
+{
+    if (gLoaderHeader.loadParams.argumentsLength == 0)
+    {
+        return nullptr;
+    }
+
+    if (strncmp(gLoaderHeader.loadParams.arguments, sSaveStateArgumentPrefix, strlen(sSaveStateArgumentPrefix)) != 0)
+    {
+        return nullptr;
+    }
+
+    argumentsLength = 0;
+    return gLoaderHeader.loadParams.arguments + strlen(sSaveStateArgumentPrefix);
+}
+
 static void handleSavePath()
 {
     if (gLoaderHeader.loadParams.savePath[0] == 0)
@@ -108,6 +126,76 @@ static void handleSavePath()
         extension[4] = 0;
     }
     sLoader.SetSavePath(gLoaderHeader.loadParams.savePath);
+}
+
+struct save_state_dump_header_t
+{
+    u32 magic;
+    u32 version;
+    u32 ramSize;
+};
+
+static void handlePendingSaveStateDump()
+{
+    if (NTR_SHARED_MEMORY->mainMemoryCmd != MAIN_MEMORY_CMD_SAVE_STATE_DUMP &&
+        NTR_SHARED_MEMORY_SDK5->mainMemoryCmd != MAIN_MEMORY_CMD_SAVE_STATE_DUMP)
+    {
+        return;
+    }
+
+    NTR_SHARED_MEMORY->mainMemoryCmd = MAIN_MEMORY_CMD_NONE;
+    NTR_SHARED_MEMORY_SDK5->mainMemoryCmd = MAIN_MEMORY_CMD_NONE;
+
+    if (gLoaderHeader.loadParams.savePath[0] == 0)
+    {
+        LOG_ERROR("Savestate dump requested, but no path was provided\n");
+        return;
+    }
+
+    FIL file;
+    if (f_open(&file, gLoaderHeader.loadParams.savePath, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+    {
+        LOG_ERROR("Failed to open savestate dump file: %s\n", gLoaderHeader.loadParams.savePath);
+        return;
+    }
+
+    save_state_dump_header_t header
+    {
+        .magic = 0x30535350u, // PSS0
+        .version = 1,
+        .ramSize = 0x400000
+    };
+
+    UINT bytesWritten = 0;
+    if (f_write(&file, &header, sizeof(header), &bytesWritten) != FR_OK || bytesWritten != sizeof(header))
+    {
+        LOG_ERROR("Failed to write savestate header\n");
+        f_close(&file);
+        return;
+    }
+
+    constexpr u32 kChunkSize = 64 * 1024;
+    for (u32 offset = 0; offset < header.ramSize; offset += kChunkSize)
+    {
+        u32 chunkSize = header.ramSize - offset;
+        if (chunkSize > kChunkSize)
+            chunkSize = kChunkSize;
+
+        if (f_write(&file, (const void*)(0x02000000 + offset), chunkSize, &bytesWritten) != FR_OK || bytesWritten != chunkSize)
+        {
+            LOG_ERROR("Failed while writing savestate dump at offset 0x%x\n", offset);
+            f_close(&file);
+            return;
+        }
+    }
+
+    if (f_close(&file) != FR_OK)
+    {
+        LOG_ERROR("Failed to close savestate dump file\n");
+        return;
+    }
+
+    LOG_DEBUG("Savestate RAM dump written to %s\n", gLoaderHeader.loadParams.savePath);
 }
 
 static void clearSoundRegisters()
@@ -205,6 +293,8 @@ extern "C" void loaderMain()
         }
     }
 
+    handlePendingSaveStateDump();
+
     if (gLoaderHeader.v3.cheats != nullptr && gLoaderHeader.v3.cheats->numberOfCheats != 0)
     {
         // Copy cheats to vram
@@ -229,7 +319,9 @@ extern "C" void loaderMain()
     {
         sLoader.SetRomPath(gLoaderHeader.loadParams.romPath);
         handleSavePath();
-        sLoader.SetArguments(gLoaderHeader.loadParams.arguments, gLoaderHeader.loadParams.argumentsLength);
+        u32 argumentsLength = gLoaderHeader.loadParams.argumentsLength;
+        sLoader.SetSaveStatePath(extractSaveStatePathFromArguments(argumentsLength));
+        sLoader.SetArguments(gLoaderHeader.loadParams.arguments, argumentsLength);
         sLoader.SetLauncherPath(gLoaderHeader.v2.launcherPath);
         sLoader.Load(BootMode::Normal);
     }

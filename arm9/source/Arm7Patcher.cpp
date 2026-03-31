@@ -30,7 +30,8 @@ static u32 correctAddress(u32 address, const nds_header_ntr_t* romHeader)
     }
 }
 
-void* Arm7Patcher::ApplyPatches(const LoaderPlatform* loaderPlatform, u32 cheatsLength, void*& cheatsPtr) const
+void* Arm7Patcher::ApplyPatches(const LoaderPlatform* loaderPlatform, u32 cheatsLength,
+    const void* hotkeyResetArm7Function, void*& cheatsPtr) const
 {
     cheatsPtr = nullptr;
     auto romHeader = (const nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader;
@@ -102,8 +103,12 @@ void* Arm7Patcher::ApplyPatches(const LoaderPlatform* loaderPlatform, u32 cheats
             void* cheats = (void*)correctAddress(mainMemoryArenaLo, romHeader);
             LOG_DEBUG("Cheats placed at 0x%p\n", cheats);
             cheatsPtr = cheats;
-            patchCollection.AddPatch(new CheatEnginePatch(cheats));
             mainMemoryArenaLo += cheatsLength;
+        }
+
+        if (cheatsPtr != nullptr || hotkeyResetArm7Function != nullptr)
+        {
+            patchCollection.AddPatch(new CheatEnginePatch(cheatsPtr, hotkeyResetArm7Function));
         }
 
         if (romHeader->unitCode == 0) // seems only present on NITRO, not on HYBRID or LIMITED

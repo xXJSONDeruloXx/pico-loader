@@ -17,6 +17,9 @@ public:
         /// @brief Pointer to the cheats pointer used for soft reset.
         ///        This pointer must be set to keep cheats over soft resets.
         void** softResetCheatsPointer;
+
+        /// @brief Pointer to the arm7 hotkey reset function, or \\c nullptr when unavailable.
+        const void* hotkeyResetArm7Function;
     };
 
     /// @brief Applies arm9 patches using the given \p loaderPlatform.
@@ -26,7 +29,7 @@ public:
     /// @param loaderInfo The loader info to use.
     /// @return Some information resulting from the patching.
     PatchResult ApplyPatches(const LoaderPlatform* loaderPlatform, const ApListEntry* apListEntry,
-        bool isCloneBootRom, const loader_info_t* loaderInfo) const;
+        bool isCloneBootRom, const loader_info_t* loaderInfo, const char* launcherPath, const char* romPath) const;
 
 private:
     const u32* FindMIiUncompressBackward(u32 arm9LoadAddress, SdkVersion sdkVersion) const;

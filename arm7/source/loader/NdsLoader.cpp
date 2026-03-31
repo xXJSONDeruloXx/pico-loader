@@ -33,6 +33,14 @@
 #define AP_LIST_PATH      "/_pico/aplist.bin"
 #define PATCH_LIST_PATH   "/_pico/patchlist.bin"
 #define BIOS_NDS7_PATH    "/_pico/biosnds7.rom"
+#define SAVE_STATE_MAGIC  0x30535350u
+
+struct save_state_dump_header_t
+{
+    u32 magic;
+    u32 version;
+    u32 ramSize;
+};
 
 typedef void (*entrypoint_t)(void);
 
@@ -227,6 +235,10 @@ void NdsLoader::Load(BootMode bootMode)
     if (bootMode == BootMode::Normal)
     {
         bootType = _romHeader.IsDsiWare() ? BOOT_TYPE_NAND : BOOT_TYPE_CARD;
+        if (_saveStatePath != nullptr && _saveStatePath[0] != 0)
+        {
+            bootType = BOOT_TYPE_MEMORY;
+        }
         HandleIQueRegionFreePatching();
     }
     else if (bootMode == BootMode::Multiboot)
@@ -361,6 +373,10 @@ void NdsLoader::Load(BootMode bootMode)
     }
 
     HandleDldiPatching();
+    if (!TryRestoreSaveState())
+    {
+        LOG_ERROR("Failed to restore savestate dump\n");
+    }
     StartRom(bootMode);
 }
 
@@ -1077,6 +1093,52 @@ void NdsLoader::SetupDsiDeviceList()
 bool NdsLoader::TrySetupDsiWareSave()
 {
     return DsiWareSaveArranger().SetupDsiWareSave(_romPath, _romHeader, _dsiwareSaveResult);
+}
+
+bool NdsLoader::TryRestoreSaveState()
+{
+    if (_saveStatePath == nullptr || _saveStatePath[0] == 0)
+    {
+        return true;
+    }
+
+    FIL file;
+    UINT bytesRead = 0;
+    if (f_open(&file, _saveStatePath, FA_OPEN_EXISTING | FA_READ) != FR_OK)
+    {
+        return false;
+    }
+
+    save_state_dump_header_t header;
+    if (f_read(&file, &header, sizeof(header), &bytesRead) != FR_OK || bytesRead != sizeof(header))
+    {
+        f_close(&file);
+        return false;
+    }
+
+    if (header.magic != SAVE_STATE_MAGIC || header.version != 1 || header.ramSize != 0x400000)
+    {
+        f_close(&file);
+        return false;
+    }
+
+    constexpr u32 kChunkSize = 64 * 1024;
+    for (u32 offset = 0; offset < header.ramSize; offset += kChunkSize)
+    {
+        u32 chunkSize = header.ramSize - offset;
+        if (chunkSize > kChunkSize)
+            chunkSize = kChunkSize;
+
+        if (f_read(&file, (void*)(0x02000000 + offset), chunkSize, &bytesRead) != FR_OK || bytesRead != chunkSize)
+        {
+            f_close(&file);
+            return false;
+        }
+    }
+
+    f_close(&file);
+    LOG_DEBUG("Restored savestate dump from %s\n", _saveStatePath);
+    return true;
 }
 
 bool NdsLoader::TryDecryptSecureArea()

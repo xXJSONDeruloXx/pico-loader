@@ -1,4 +1,5 @@
 #include "common.h"
+#include <string.h>
 #include "ModuleParamsLocator.h"
 #include "AutoloadAdjuster.h"
 #include "SdkVersion.h"
@@ -12,6 +13,7 @@
 #include "patches/arm9/sdk5/CardiReadRomWithCpuPatch.h"
 #include "patches/arm9/CardiReadRomIdCorePatch.h"
 #include "patches/arm9/OSResetSystemPatch.h"
+#include "patches/arm9/VBlankHotkeyPatch.h"
 #include "patches/arm9/PokemonDownloaderArm9Patch.h"
 #include "patches/arm9/DSProtectArm9Patch.h"
 #include "patches/arm9/LastWindowCrcPatch.h"
@@ -32,6 +34,7 @@
 #include "cache.h"
 #include "ApList.h"
 #include "patches/platform/LoaderPlatform.h"
+#include "patches/homebrew/BootstubPatchCode.h"
 #include "errorDisplay/ErrorDisplay.h"
 #include "Arm9Patcher.h"
 
@@ -47,8 +50,25 @@ static const u32 sMiiUncompressBackwardPatternOld2[] = { 0xE3500000, 0x0A00002B,
 static const u32 sMiiUncompressBackwardPattern[] = { 0xE3500000, 0x0A000027, 0xE92D00F0, 0xE9100006 };
 static const u32 sMiiUncompressBackwardPatternHybrid[] = { 0xE3500000, 0x0A000029, 0xE92D01F0, 0xE9100006 };
 
+static void buildSaveStatePath(const char* romPath, char* saveStatePath)
+{
+    if (!romPath)
+    {
+        saveStatePath[0] = 0;
+        return;
+    }
+
+    strncpy(saveStatePath, romPath, 256);
+    saveStatePath[255] = 0;
+    char* extension = strrchr(saveStatePath, '.');
+    if (!extension)
+        extension = &saveStatePath[strlen(saveStatePath)];
+    strncpy(extension, ".state.bin", 256 - (extension - saveStatePath));
+    saveStatePath[255] = 0;
+}
+
 Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderPlatform, const ApListEntry* apListEntry,
-    bool isCloneBootRom, const loader_info_t* loaderInfo) const
+    bool isCloneBootRom, const loader_info_t* loaderInfo, const char* launcherPath, const char* romPath) const
 {
     auto romHeader = (const nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader;
     auto twlRomHeader = (const nds_header_twl_t*)TWL_SHARED_MEMORY->twlRomHeader;
@@ -166,6 +186,7 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
     };
     PatchCollection patchCollection;
     OSResetSystemPatch* osResetSystemPatch = nullptr;
+    const void* hotkeyResetArm7Function = nullptr;
     if (sdkVersion != 0)
     {
         if (*(vu32*)0x02FFF00C == GAMECODE("ADAJ") &&
@@ -220,6 +241,25 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
         patchCollection.AddPatch(new CardiReadRomIdCorePatch());
         osResetSystemPatch = new OSResetSystemPatch(loaderInfo);
         patchCollection.AddPatch(osResetSystemPatch);
+
+        if (launcherPath != nullptr && launcherPath[0] != 0)
+        {
+            char* launcherPathCopy = (char*)patchContext.GetPatchHeap().Alloc(256);
+            char* saveStatePathCopy = (char*)patchContext.GetPatchHeap().Alloc(256);
+            strncpy(launcherPathCopy, launcherPath, 256);
+            launcherPathCopy[255] = 0;
+            buildSaveStatePath(romPath, saveStatePathCopy);
+            auto hotkeyResetPatchCode = patchContext.GetPatchCodeCollection().AddUniquePatchCode<BootstubPatchCode>(
+                patchContext.GetPatchHeap(),
+                nullptr,
+                launcherPathCopy,
+                saveStatePathCopy,
+                loaderInfo,
+                loaderPlatform->CreateSdReadPatchCode(patchContext.GetPatchCodeCollection(), patchContext.GetPatchHeap()));
+            hotkeyResetArm7Function = hotkeyResetPatchCode->GetArm7RebootFunction();
+            patchCollection.AddPatch(new VBlankHotkeyPatch(hotkeyResetPatchCode->GetArm9RebootFunction()));
+        }
+
         AddGamePatches(patchCollection, romHeader->gameCode, apListEntry);
 
         if (moduleParams && compressedEnd != 0)
@@ -247,7 +287,8 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
 
     return PatchResult
     {
-        .softResetCheatsPointer = softResetCheatsPointer
+        .softResetCheatsPointer = softResetCheatsPointer,
+        .hotkeyResetArm7Function = hotkeyResetArm7Function
     };
 }
 

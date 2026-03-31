@@ -34,6 +34,13 @@ public:
         _launcherPath = launcherPath;
     }
 
+    /// @brief Sets the \p saveStatePath to restore from.
+    /// @param saveStatePath The savestate path to restore from.
+    void SetSaveStatePath(const TCHAR* saveStatePath)
+    {
+        _saveStatePath = saveStatePath;
+    }
+
     /// @brief Sets the argv arguments to pass to the rom.
     /// @param arguments The argv arguments.
     /// @param argumentsLength The length of the argv arguments.
@@ -59,6 +66,7 @@ private:
     const TCHAR* _romPath = nullptr;
     const TCHAR* _savePath = nullptr;
     const TCHAR* _launcherPath = nullptr;
+    const TCHAR* _saveStatePath = nullptr;
     u32 _argumentsLength = 0;
     const char* _arguments = nullptr;
     pload_cheats_t* _cheats = nullptr;
@@ -92,6 +100,7 @@ private:
     void HandleGameSpecificPatches();
     void HandleHomebrewPatching();
     bool TrySetupDsiWareSave();
+    bool TryRestoreSaveState();
     bool TryDecryptSecureArea();
     void HandleIQueRegionFreePatching();
     ConsoleRegion GetRomRegion(u32 gameCode);
