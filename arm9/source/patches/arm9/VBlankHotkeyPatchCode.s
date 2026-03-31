@@ -33,6 +33,8 @@ patch_vblankhotkey_handler:
     str r1, [r0], #4
     ldr r1, [sp, #16]
     str r1, [r0], #4
+    ldr r1, patch_vblankhotkey_originalHandler_address
+    str r1, [r0], #4
     ldr r1, [sp, #0]
     str r1, [r0], #4
     ldr r1, [sp, #4]

@@ -28,19 +28,12 @@
 #include "Arm7IoRegisterClearer.h"
 #include "PatchListFactory.h"
 #include "CheatPreprocessor.h"
+#include "SaveState.h"
 #include "NdsLoader.h"
 
 #define AP_LIST_PATH      "/_pico/aplist.bin"
 #define PATCH_LIST_PATH   "/_pico/patchlist.bin"
 #define BIOS_NDS7_PATH    "/_pico/biosnds7.rom"
-#define SAVE_STATE_MAGIC  0x30535350u
-
-struct save_state_dump_header_t
-{
-    u32 magic;
-    u32 version;
-    u32 ramSize;
-};
 
 typedef void (*entrypoint_t)(void);
 
@@ -1109,23 +1102,68 @@ bool NdsLoader::TryRestoreSaveState()
         return false;
     }
 
-    save_state_dump_header_t header;
-    if (f_read(&file, &header, sizeof(header), &bytesRead) != FR_OK || bytesRead != sizeof(header))
+    save_state_file_header_t header {};
+    if (f_read(&file, &header, sizeof(header), &bytesRead) != FR_OK || bytesRead < 12)
     {
         f_close(&file);
         return false;
     }
 
-    if (header.magic != SAVE_STATE_MAGIC || header.version != 1 || header.ramSize != 0x400000)
+    u32 ramOffset = 0;
+    u32 ramSize = 0;
+    bool hasExplicitContexts = false;
+    if (header.magic == SAVE_STATE_FILE_MAGIC_V2 &&
+        header.version == SAVE_STATE_FILE_VERSION_V2 &&
+        header.ramSize == 0x400000)
+    {
+        hasExplicitContexts = true;
+        ramOffset = header.ramOffset;
+        ramSize = header.ramSize;
+
+        if (header.arm9ContextSize == sizeof(save_state_cpu_context_t))
+        {
+            if (f_lseek(&file, header.arm9ContextOffset) != FR_OK ||
+                f_read(&file, (void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS, sizeof(save_state_cpu_context_t), &bytesRead) != FR_OK ||
+                bytesRead != sizeof(save_state_cpu_context_t))
+            {
+                f_close(&file);
+                return false;
+            }
+        }
+
+        if (header.arm7ContextSize == sizeof(save_state_cpu_context_t))
+        {
+            if (f_lseek(&file, header.arm7ContextOffset) != FR_OK ||
+                f_read(&file, (void*)SAVE_STATE_ARM7_CONTEXT_ADDRESS, sizeof(save_state_cpu_context_t), &bytesRead) != FR_OK ||
+                bytesRead != sizeof(save_state_cpu_context_t))
+            {
+                f_close(&file);
+                return false;
+            }
+        }
+    }
+    else if (header.magic == SAVE_STATE_FILE_MAGIC_V1 && header.version == 1 && header.arm9ContextOffset == 0x400000)
+    {
+        // Compatibility with the old v1 format, where the third word was ramSize.
+        ramOffset = 12;
+        ramSize = header.arm9ContextOffset;
+    }
+    else
+    {
+        f_close(&file);
+        return false;
+    }
+
+    if (f_lseek(&file, ramOffset) != FR_OK)
     {
         f_close(&file);
         return false;
     }
 
     constexpr u32 kChunkSize = 64 * 1024;
-    for (u32 offset = 0; offset < header.ramSize; offset += kChunkSize)
+    for (u32 offset = 0; offset < ramSize; offset += kChunkSize)
     {
-        u32 chunkSize = header.ramSize - offset;
+        u32 chunkSize = ramSize - offset;
         if (chunkSize > kChunkSize)
             chunkSize = kChunkSize;
 
@@ -1137,7 +1175,14 @@ bool NdsLoader::TryRestoreSaveState()
     }
 
     f_close(&file);
-    LOG_DEBUG("Restored savestate dump from %s\n", _saveStatePath);
+    if (!hasExplicitContexts)
+    {
+        LOG_DEBUG("Restored legacy savestate dump from %s\n", _saveStatePath);
+    }
+    else
+    {
+        LOG_DEBUG("Restored savestate dump from %s\n", _saveStatePath);
+    }
     return true;
 }
 

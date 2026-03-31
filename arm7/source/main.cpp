@@ -17,6 +17,7 @@
 #include "fat/dldi.h"
 #include "loader/NdsLoader.h"
 #include "sharedMemory.h"
+#include "SaveState.h"
 #include "ndsHeader.h"
 #include "globalHeap.h"
 #include "mmc/tmio.h"
@@ -128,13 +129,6 @@ static void handleSavePath()
     sLoader.SetSavePath(gLoaderHeader.loadParams.savePath);
 }
 
-struct save_state_dump_header_t
-{
-    u32 magic;
-    u32 version;
-    u32 ramSize;
-};
-
 static void handlePendingSaveStateDump()
 {
     if (NTR_SHARED_MEMORY->mainMemoryCmd != MAIN_MEMORY_CMD_SAVE_STATE_DUMP &&
@@ -159,10 +153,15 @@ static void handlePendingSaveStateDump()
         return;
     }
 
-    save_state_dump_header_t header
+    save_state_file_header_t header
     {
-        .magic = 0x30535350u, // PSS0
-        .version = 1,
+        .magic = SAVE_STATE_FILE_MAGIC_V2,
+        .version = SAVE_STATE_FILE_VERSION_V2,
+        .arm9ContextOffset = sizeof(save_state_file_header_t),
+        .arm9ContextSize = sizeof(save_state_cpu_context_t),
+        .arm7ContextOffset = sizeof(save_state_file_header_t) + sizeof(save_state_cpu_context_t),
+        .arm7ContextSize = sizeof(save_state_cpu_context_t),
+        .ramOffset = sizeof(save_state_file_header_t) + sizeof(save_state_cpu_context_t) * 2,
         .ramSize = 0x400000
     };
 
@@ -170,6 +169,20 @@ static void handlePendingSaveStateDump()
     if (f_write(&file, &header, sizeof(header), &bytesWritten) != FR_OK || bytesWritten != sizeof(header))
     {
         LOG_ERROR("Failed to write savestate header\n");
+        f_close(&file);
+        return;
+    }
+
+    if (f_write(&file, (const void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS, sizeof(save_state_cpu_context_t), &bytesWritten) != FR_OK || bytesWritten != sizeof(save_state_cpu_context_t))
+    {
+        LOG_ERROR("Failed to write ARM9 savestate context\n");
+        f_close(&file);
+        return;
+    }
+
+    if (f_write(&file, (const void*)SAVE_STATE_ARM7_CONTEXT_ADDRESS, sizeof(save_state_cpu_context_t), &bytesWritten) != FR_OK || bytesWritten != sizeof(save_state_cpu_context_t))
+    {
+        LOG_ERROR("Failed to write ARM7 savestate context\n");
         f_close(&file);
         return;
     }
