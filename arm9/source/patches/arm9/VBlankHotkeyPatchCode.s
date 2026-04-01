@@ -229,6 +229,17 @@ patch_vblankhotkey_handler:
     mrc p15, 0, r2, c9, c1, 1
     str r2, [r0], #4          // ITCM control register
 
+    mrc p15, 0, r2, c9, c1, 0
+    ldr r12, dtcmBaseMask
+    and r1, r2, r12
+    ldr r0, arm9DtcmBufferAddress
+    ldr r2, arm9DtcmSize
+copy_arm9_dtcm_loop:
+    ldmia r1!, {r3-r10}
+    stmia r0!, {r3-r10}
+    subs r2, r2, #0x20
+    bgt copy_arm9_dtcm_loop
+
     ldr r0, arm9ItcmBuffer0Address
     ldr r1, arm9ItcmSourceAddress
     ldr r2, arm9ItcmChunkSize
@@ -297,6 +308,9 @@ ioStateMagic:
 arm9ItcmBuffer0Address:
     .word 0x02FF0000
 
+arm9DtcmBufferAddress:
+    .word 0x02FF4000
+
 arm9ItcmBuffer1Address:
     .word 0x02FF8000
 
@@ -310,6 +324,12 @@ arm9ItcmMagic:
     .word 0x4954434D
 
 arm9ItcmChunkSize:
+    .word 0x4000
+
+dtcmBaseMask:
+    .word 0xFFFFF000
+
+arm9DtcmSize:
     .word 0x4000
 
 arm9ItcmSize:

@@ -16,12 +16,16 @@
 #define CTX_BASE          0x023FF000
 #define CTX_MAGIC         0x43545831
 #define ITCM_BUFFER0_BASE 0x02FF0000
+#define DTCM_BUFFER_BASE  0x02FF4000
 #define ITCM_BUFFER1_BASE 0x02FF8000
+#define DTCM_INFO_BASE    0x02FFBFE8
 #define ITCM_INFO_BASE    0x02FFBFF0
+#define DTCM_MAGIC        0x4454434D
 #define ITCM_MAGIC        0x4954434D
 #define ITCM_BASE         0x01000000
 #define ITCM_CHUNK_SIZE   0x00004000
 #define ITCM_MAX_SIZE     0x00008000
+#define DTCM_MAX_SIZE     0x00004000
 #define IO_STATE_BASE     0x023FF100
 #define IO_DTCM_CONTROL   268
 #define IO_ITCM_CONTROL   272
@@ -103,6 +107,37 @@ skip_dtcm_control_restore:
     mcr p15, 0, r2, c9, c1, 1
 skip_itcm_control_restore:
 
+    // --- Restore staged ARM9 DTCM if present ---
+    ldr r5, dtcm_info_addr
+    ldr r6, [r5]
+    ldr r7, dtcm_magic_val
+    cmp r6, r7
+    bne skip_dtcm_restore
+
+    ldr r6, [r5, #4]
+    cmp r6, #0
+    beq clear_dtcm_info
+    ldr r7, dtcm_max_size_val
+    cmp r6, r7
+    bhi clear_dtcm_info
+
+    ldr r2, [r4, #IO_DTCM_CONTROL]
+    cmp r2, #0
+    beq clear_dtcm_info
+    ldr r7, dtcm_base_mask_val
+    and r7, r2, r7
+    ldr r8, dtcm_buffer_addr
+restore_dtcm_loop:
+    ldr r0, [r8], #4
+    str r0, [r7], #4
+    subs r6, r6, #4
+    bne restore_dtcm_loop
+
+clear_dtcm_info:
+    mov r0, #0
+    str r0, [r5]
+
+skip_dtcm_restore:
     // --- Valid context found: consume it (clear magic) ---
     mov r2, #0
     str r2, [r1]                    // clear magic so it won't be used again
@@ -177,18 +212,28 @@ ctx_magic_val:
     .word CTX_MAGIC
 itcm_buffer0_addr:
     .word ITCM_BUFFER0_BASE
+dtcm_buffer_addr:
+    .word DTCM_BUFFER_BASE
 itcm_buffer1_addr:
     .word ITCM_BUFFER1_BASE
+dtcm_info_addr:
+    .word DTCM_INFO_BASE
 itcm_info_addr:
     .word ITCM_INFO_BASE
 io_state_addr:
     .word IO_STATE_BASE
+dtcm_magic_val:
+    .word DTCM_MAGIC
 itcm_magic_val:
     .word ITCM_MAGIC
+dtcm_base_mask_val:
+    .word 0xFFFFF000
 itcm_base_addr:
     .word ITCM_BASE
 itcm_chunk_size_val:
     .word ITCM_CHUNK_SIZE
+dtcm_max_size_val:
+    .word DTCM_MAX_SIZE
 itcm_max_size_val:
     .word ITCM_MAX_SIZE
 .pool
