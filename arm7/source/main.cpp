@@ -168,13 +168,32 @@ static void handlePendingSaveStateDump()
         return;
     }
 
-    FIL file;
-    if (f_open(&file, gLoaderHeader.loadParams.savePath, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+    char tempSaveStatePath[272];
+    size_t saveStatePathLength = strlen(gLoaderHeader.loadParams.savePath);
+    if (saveStatePathLength + 5 >= sizeof(tempSaveStatePath))
     {
-        LOG_ERROR("Failed to open savestate dump file: %s\n", gLoaderHeader.loadParams.savePath);
+        LOG_ERROR("Savestate dump path is too long: %s\n", gLoaderHeader.loadParams.savePath);
         clearPendingSaveStateMarkers();
         return;
     }
+
+    strcpy(tempSaveStatePath, gLoaderHeader.loadParams.savePath);
+    strcat(tempSaveStatePath, ".tmp");
+    f_unlink(tempSaveStatePath);
+
+    FIL file;
+    if (f_open(&file, tempSaveStatePath, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+    {
+        LOG_ERROR("Failed to open temp savestate dump file: %s\n", tempSaveStatePath);
+        clearPendingSaveStateMarkers();
+        return;
+    }
+
+    auto abortPendingSaveStateDump = [&]() {
+        f_close(&file);
+        f_unlink(tempSaveStatePath);
+        clearPendingSaveStateMarkers();
+    };
 
     constexpr u32 kPaletteBase      = 0x05000000;
     constexpr u32 kPaletteSize      = 0x800;
@@ -221,24 +240,21 @@ static void handlePendingSaveStateDump()
     if (f_write(&file, &header, sizeof(header), &bytesWritten) != FR_OK || bytesWritten != sizeof(header))
     {
         LOG_ERROR("Failed to write savestate header\n");
-        f_close(&file);
-        clearPendingSaveStateMarkers();
+        abortPendingSaveStateDump();
         return;
     }
 
     if (f_write(&file, (const void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS, sizeof(save_state_cpu_context_t), &bytesWritten) != FR_OK || bytesWritten != sizeof(save_state_cpu_context_t))
     {
         LOG_ERROR("Failed to write ARM9 savestate context\n");
-        f_close(&file);
-        clearPendingSaveStateMarkers();
+        abortPendingSaveStateDump();
         return;
     }
 
     if (f_write(&file, (const void*)SAVE_STATE_ARM7_CONTEXT_ADDRESS, sizeof(save_state_cpu_context_t), &bytesWritten) != FR_OK || bytesWritten != sizeof(save_state_cpu_context_t))
     {
         LOG_ERROR("Failed to write ARM7 savestate context\n");
-        f_close(&file);
-        clearPendingSaveStateMarkers();
+        abortPendingSaveStateDump();
         return;
     }
 
@@ -252,8 +268,7 @@ static void handlePendingSaveStateDump()
         if (f_write(&file, (const void*)(kRamBase + offset), chunkSize, &bytesWritten) != FR_OK || bytesWritten != chunkSize)
         {
             LOG_ERROR("Failed while writing savestate dump at RAM offset 0x%x\n", offset);
-            f_close(&file);
-            clearPendingSaveStateMarkers();
+            abortPendingSaveStateDump();
             return;
         }
     }
@@ -261,16 +276,14 @@ static void handlePendingSaveStateDump()
     if (f_write(&file, (const void*)kSharedWramBase, kSharedWramSize, &bytesWritten) != FR_OK || bytesWritten != kSharedWramSize)
     {
         LOG_ERROR("Failed to write shared WRAM savestate section\n");
-        f_close(&file);
-        clearPendingSaveStateMarkers();
+        abortPendingSaveStateDump();
         return;
     }
 
     if (f_write(&file, (const void*)kArm7WramBase, kArm7WramSize, &bytesWritten) != FR_OK || bytesWritten != kArm7WramSize)
     {
         LOG_ERROR("Failed to write ARM7 WRAM savestate section\n");
-        f_close(&file);
-        clearPendingSaveStateMarkers();
+        abortPendingSaveStateDump();
         return;
     }
 
@@ -283,16 +296,14 @@ static void handlePendingSaveStateDump()
         if (!requestArm9VramChunk(IPC_COMMAND_ARM9_COPY_VRAM_CHUNK, offset, chunkSize))
         {
             LOG_ERROR("Failed to copy VRAM savestate chunk at offset 0x%x\n", offset);
-            f_close(&file);
-            clearPendingSaveStateMarkers();
+            abortPendingSaveStateDump();
             return;
         }
 
         if (f_write(&file, (const void*)SAVE_STATE_TRANSFER_BUFFER_ADDRESS, chunkSize, &bytesWritten) != FR_OK || bytesWritten != chunkSize)
         {
             LOG_ERROR("Failed to write VRAM savestate section at offset 0x%x\n", offset);
-            f_close(&file);
-            clearPendingSaveStateMarkers();
+            abortPendingSaveStateDump();
             return;
         }
     }
@@ -300,22 +311,30 @@ static void handlePendingSaveStateDump()
     if (f_write(&file, (const void*)kPaletteBase, kPaletteSize, &bytesWritten) != FR_OK || bytesWritten != kPaletteSize)
     {
         LOG_ERROR("Failed to write palette savestate section\n");
-        f_close(&file);
-        clearPendingSaveStateMarkers();
+        abortPendingSaveStateDump();
         return;
     }
 
     if (f_write(&file, (const void*)kOamBase, kOamSize, &bytesWritten) != FR_OK || bytesWritten != kOamSize)
     {
         LOG_ERROR("Failed to write OAM savestate section\n");
-        f_close(&file);
-        clearPendingSaveStateMarkers();
+        abortPendingSaveStateDump();
         return;
     }
 
     if (f_close(&file) != FR_OK)
     {
-        LOG_ERROR("Failed to close savestate dump file\n");
+        LOG_ERROR("Failed to close temp savestate dump file\n");
+        f_unlink(tempSaveStatePath);
+        clearPendingSaveStateMarkers();
+        return;
+    }
+
+    f_unlink(gLoaderHeader.loadParams.savePath);
+    if (f_rename(tempSaveStatePath, gLoaderHeader.loadParams.savePath) != FR_OK)
+    {
+        LOG_ERROR("Failed to commit savestate dump file: %s\n", gLoaderHeader.loadParams.savePath);
+        f_unlink(tempSaveStatePath);
         clearPendingSaveStateMarkers();
         return;
     }
