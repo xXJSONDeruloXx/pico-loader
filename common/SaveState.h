@@ -35,6 +35,10 @@ struct save_state_arm9_io_state_t
     u32 dispstat;
     u32 masterBright;
     u32 masterBrightSub;
+    u32 powerCnt;
+    u32 mosaic;
+    u32 mosaicSub;
+    u32 dispCapCnt;
     u32 timer0;
     u32 timer1;
     u32 timer2;
@@ -73,7 +77,7 @@ struct save_state_arm9_io_state_t
     u32 blendSub1;
 };
 
-static_assert(sizeof(save_state_arm9_io_state_t) == 168);
+static_assert(sizeof(save_state_arm9_io_state_t) == 184);
 
 struct save_state_file_header_t
 {

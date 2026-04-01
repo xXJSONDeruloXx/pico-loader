@@ -78,6 +78,15 @@ patch_vblankhotkey_handler:
     str r2, [r0], #4          // REG_MASTER_BRIGHT
     ldrh r2, [r3, #0x6C]
     str r2, [r0], #4          // REG_MASTER_BRIGHT_SUB
+    ldr r12, =0x04000304
+    ldrh r2, [r12]
+    str r2, [r0], #4          // REG_POWERCNT
+    ldrh r2, [r1, #0x4C]
+    str r2, [r0], #4          // REG_MOSAIC
+    ldrh r2, [r3, #0x4C]
+    str r2, [r0], #4          // REG_MOSAIC_SUB
+    ldr r2, [r1, #0x64]
+    str r2, [r0], #4          // REG_DISPCAPCNT
 
     ldr r1, =0x04000100
     ldr r2, [r1, #0x0]

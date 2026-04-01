@@ -113,6 +113,10 @@ static void restoreArm9IoState()
     *(vu16*)0x04000004 = (u16)ioState->dispstat;
     *(vu16*)0x0400006C = (u16)ioState->masterBright;
     *(vu16*)0x0400106C = (u16)ioState->masterBrightSub;
+    *(vu16*)0x04000304 = (u16)ioState->powerCnt;
+    *(vu16*)0x0400004C = (u16)ioState->mosaic;
+    *(vu16*)0x0400104C = (u16)ioState->mosaicSub;
+    *(vu32*)0x04000064 = ioState->dispCapCnt;
     *(vu32*)0x04000100 = ioState->timer0;
     *(vu32*)0x04000104 = ioState->timer1;
     *(vu32*)0x04000108 = ioState->timer2;
