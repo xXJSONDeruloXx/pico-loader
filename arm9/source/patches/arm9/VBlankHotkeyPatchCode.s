@@ -193,6 +193,34 @@ patch_vblankhotkey_handler:
     ldrh r2, [r3, #0x4]
     str r2, [r0], #4          // BLDY SUB
 
+    ldr r1, =0x040000B0
+    ldr r2, [r1, #0x0]
+    str r2, [r0], #4          // DMA0 SAD
+    ldr r2, [r1, #0xC]
+    str r2, [r0], #4          // DMA1 SAD
+    ldr r2, [r1, #0x18]
+    str r2, [r0], #4          // DMA2 SAD
+    ldr r2, [r1, #0x24]
+    str r2, [r0], #4          // DMA3 SAD
+
+    ldr r2, [r1, #0x4]
+    str r2, [r0], #4          // DMA0 DAD
+    ldr r2, [r1, #0x10]
+    str r2, [r0], #4          // DMA1 DAD
+    ldr r2, [r1, #0x1C]
+    str r2, [r0], #4          // DMA2 DAD
+    ldr r2, [r1, #0x28]
+    str r2, [r0], #4          // DMA3 DAD
+
+    ldr r2, [r1, #0x8]
+    str r2, [r0], #4          // DMA0 CNT
+    ldr r2, [r1, #0x14]
+    str r2, [r0], #4          // DMA1 CNT
+    ldr r2, [r1, #0x20]
+    str r2, [r0], #4          // DMA2 CNT
+    ldr r2, [r1, #0x2C]
+    str r2, [r0], #4          // DMA3 CNT
+
     ldr r0, sdk5MainMemoryCmdAddress
     mov r1, #0x54
     orr r1, r1, #0x5300

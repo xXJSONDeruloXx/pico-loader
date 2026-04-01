@@ -276,6 +276,19 @@ static void restoreArm9IoState()
     *(vu32*)0x04001050 = ioState->blendSub0;
     *(vu16*)0x04001054 = (u16)ioState->blendSub1;
 
+    *(vu32*)0x040000B0 = ioState->dmaSad[0];
+    *(vu32*)0x040000BC = ioState->dmaSad[1];
+    *(vu32*)0x040000C8 = ioState->dmaSad[2];
+    *(vu32*)0x040000D4 = ioState->dmaSad[3];
+    *(vu32*)0x040000B4 = ioState->dmaDad[0];
+    *(vu32*)0x040000C0 = ioState->dmaDad[1];
+    *(vu32*)0x040000CC = ioState->dmaDad[2];
+    *(vu32*)0x040000D8 = ioState->dmaDad[3];
+    *(vu32*)0x040000B8 = ioState->dmaCnt[0];
+    *(vu32*)0x040000C4 = ioState->dmaCnt[1];
+    *(vu32*)0x040000D0 = ioState->dmaCnt[2];
+    *(vu32*)0x040000DC = ioState->dmaCnt[3];
+
     *(vu32*)0x04000208 = ioState->ime;
 }
 

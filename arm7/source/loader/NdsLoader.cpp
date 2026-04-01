@@ -980,8 +980,29 @@ static void restoreArm7IoState()
     *(vu16*)0x0400010E = (u16)(ioState->timer3 >> 16);
     REG_IE = ioState->ie;
     *(vu16*)0x04000500 = (u16)ioState->soundCnt;
+
+    for (int i = 0; i < 4; i++)
+    {
+        *(vu32*)(0x040000B0 + i * 0xC) = ioState->dmaChannels[i].sad;
+        *(vu32*)(0x040000B4 + i * 0xC) = ioState->dmaChannels[i].dad;
+        *(vu32*)(0x040000B8 + i * 0xC) = ioState->dmaChannels[i].cnt;
+    }
+
+    for (int i = 0; i < 16; i++)
+    {
+        *(vu32*)(0x04000404 + i * 0x10) = ioState->soundChannels[i].sad;
+        *(vu32*)(0x04000408 + i * 0x10) = ioState->soundChannels[i].tmrPnt;
+        *(vu32*)(0x0400040C + i * 0x10) = ioState->soundChannels[i].len;
+        *(vu32*)(0x04000400 + i * 0x10) = ioState->soundChannels[i].cnt;
+    }
+
+    *(vu32*)0x04000510 = ioState->sndCapDad[0];
+    *(vu32*)0x04000514 = ioState->sndCapLen[0];
+    *(vu32*)0x04000518 = ioState->sndCapDad[1];
+    *(vu32*)0x0400051C = ioState->sndCapLen[1];
     *(vu8*)0x04000508 = (u8)ioState->sndCapCnt;
     *(vu8*)0x04000509 = (u8)(ioState->sndCapCnt >> 8);
+    *(vu16*)0x04000134 = (u16)ioState->rcnt0L;
     REG_IME = ioState->ime;
 }
 
@@ -1187,8 +1208,10 @@ bool NdsLoader::TryRestoreSaveState()
                bytesRead == sizeof(save_state_cpu_context_t);
     };
 
-    if (header.magic == SAVE_STATE_FILE_MAGIC_V4 &&
-        header.version == SAVE_STATE_FILE_VERSION_V4)
+    if ((header.magic == SAVE_STATE_FILE_MAGIC_V5 &&
+         header.version == SAVE_STATE_FILE_VERSION_V5) ||
+        (header.magic == SAVE_STATE_FILE_MAGIC_V4 &&
+         header.version == SAVE_STATE_FILE_VERSION_V4))
     {
         save_state_file_header_v4_t headerV4 {};
         if (f_lseek(&file, 0) != FR_OK ||
@@ -1344,6 +1367,30 @@ bool NdsLoader::TryRestoreSaveState()
             LOG_ERROR("Failed to restore OAM\n");
             f_close(&file);
             return false;
+        }
+    }
+
+    if (version < SAVE_STATE_FILE_VERSION_V5)
+    {
+        auto arm9IoState = (save_state_arm9_io_state_t*)SAVE_STATE_ARM9_IO_STATE_ADDRESS;
+        auto arm7IoState = (save_state_arm7_io_state_t*)SAVE_STATE_ARM7_IO_STATE_ADDRESS;
+        if (version >= SAVE_STATE_FILE_VERSION_V3)
+        {
+            if (arm9IoState->magic == SAVE_STATE_IO_MAGIC)
+            {
+                memset((u8*)arm9IoState + SAVE_STATE_ARM9_IO_STATE_V4_SIZE, 0,
+                    sizeof(save_state_arm9_io_state_t) - SAVE_STATE_ARM9_IO_STATE_V4_SIZE);
+            }
+            if (arm7IoState->magic == SAVE_STATE_IO_MAGIC)
+            {
+                memset((u8*)arm7IoState + SAVE_STATE_ARM7_IO_STATE_V4_SIZE, 0,
+                    sizeof(save_state_arm7_io_state_t) - SAVE_STATE_ARM7_IO_STATE_V4_SIZE);
+            }
+        }
+        else
+        {
+            arm9IoState->magic = 0;
+            arm7IoState->magic = 0;
         }
     }
 

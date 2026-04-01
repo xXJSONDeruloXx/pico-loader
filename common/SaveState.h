@@ -6,6 +6,8 @@
 #define SAVE_STATE_FILE_MAGIC_V2   0x31535350u // PSS1
 #define SAVE_STATE_FILE_MAGIC_V3   0x32535350u // PSS2
 #define SAVE_STATE_FILE_MAGIC_V4   0x33535350u // PSS3
+#define SAVE_STATE_FILE_MAGIC_V5   0x34535350u // PSS4
+#define SAVE_STATE_FILE_VERSION_V5 5u
 #define SAVE_STATE_FILE_VERSION_V4 4u
 #define SAVE_STATE_FILE_VERSION_V3 3u
 #define SAVE_STATE_FILE_VERSION_V2 2u
@@ -24,6 +26,9 @@ struct save_state_cpu_context_t
 };
 
 static_assert(sizeof(save_state_cpu_context_t) == 76);
+
+#define SAVE_STATE_ARM9_IO_STATE_V4_SIZE 220u
+#define SAVE_STATE_ARM7_IO_STATE_V4_SIZE 36u
 
 struct save_state_arm9_io_state_t
 {
@@ -87,9 +92,32 @@ struct save_state_arm9_io_state_t
     u32 blendMain1;
     u32 blendSub0;
     u32 blendSub1;
+
+    u32 dmaSad[4];
+    u32 dmaDad[4];
+    u32 dmaCnt[4];
 };
 
-static_assert(sizeof(save_state_arm9_io_state_t) == 220);
+static_assert(sizeof(save_state_arm9_io_state_t) == 268);
+
+struct save_state_arm7_dma_channel_t
+{
+    u32 sad;
+    u32 dad;
+    u32 cnt;
+};
+
+static_assert(sizeof(save_state_arm7_dma_channel_t) == 12);
+
+struct save_state_arm7_sound_channel_t
+{
+    u32 cnt;
+    u32 sad;
+    u32 tmrPnt;
+    u32 len;
+};
+
+static_assert(sizeof(save_state_arm7_sound_channel_t) == 16);
 
 struct save_state_arm7_io_state_t
 {
@@ -102,9 +130,14 @@ struct save_state_arm7_io_state_t
     u32 ime;
     u32 soundCnt;
     u32 sndCapCnt;
+    save_state_arm7_dma_channel_t dmaChannels[4];
+    save_state_arm7_sound_channel_t soundChannels[16];
+    u32 sndCapDad[2];
+    u32 sndCapLen[2];
+    u32 rcnt0L;
 };
 
-static_assert(sizeof(save_state_arm7_io_state_t) == 36);
+static_assert(sizeof(save_state_arm7_io_state_t) == 360);
 
 struct save_state_file_header_t
 {

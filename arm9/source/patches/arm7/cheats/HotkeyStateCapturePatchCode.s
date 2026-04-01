@@ -86,6 +86,48 @@ hotkeystatecapture_entry:
     orrs r1, r3
     stmia r0!, {r1}
 
+    ldr r2, =0x040000B0
+    movs r3, #4
+1:
+    ldr r1, [r2, #0x0]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0x4]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0x8]
+    stmia r0!, {r1}
+    adds r2, #0xC
+    subs r3, #1
+    bne 1b
+
+    ldr r2, =0x04000400
+    movs r3, #16
+2:
+    ldr r1, [r2, #0x0]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0x4]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0x8]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0xC]
+    stmia r0!, {r1}
+    adds r2, #0x10
+    subs r3, #1
+    bne 2b
+
+    ldr r2, =0x04000510
+    ldr r1, [r2, #0x0]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0x4]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0x8]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0xC]
+    stmia r0!, {r1}
+
+    ldr r2, =0x04000134
+    ldrh r1, [r2]
+    stmia r0!, {r1}
+
     pop {r0-r7, pc}
 
 .balign 4
