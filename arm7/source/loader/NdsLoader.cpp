@@ -1262,8 +1262,10 @@ bool NdsLoader::TryRestoreSaveState()
 
     ((save_state_arm9_itcm_state_t*)SAVE_STATE_ARM9_ITCM_INFO_ADDRESS)->magic = 0;
 
-    if (header.magic == SAVE_STATE_FILE_MAGIC_V7 &&
-        header.version == SAVE_STATE_FILE_VERSION_V7)
+    if ((header.magic == SAVE_STATE_FILE_MAGIC_V8 &&
+         header.version == SAVE_STATE_FILE_VERSION_V8) ||
+        (header.magic == SAVE_STATE_FILE_MAGIC_V7 &&
+         header.version == SAVE_STATE_FILE_VERSION_V7))
     {
         save_state_file_header_v7_t headerV7 {};
         if (f_lseek(&file, 0) != FR_OK ||
@@ -1518,7 +1520,7 @@ bool NdsLoader::TryRestoreSaveState()
         return false;
     }
 
-    if (version < SAVE_STATE_FILE_VERSION_V5)
+    if (version < SAVE_STATE_FILE_VERSION_V8)
     {
         auto arm9IoState = (save_state_arm9_io_state_t*)SAVE_STATE_ARM9_IO_STATE_ADDRESS;
         auto arm7IoState = (save_state_arm7_io_state_t*)SAVE_STATE_ARM7_IO_STATE_ADDRESS;

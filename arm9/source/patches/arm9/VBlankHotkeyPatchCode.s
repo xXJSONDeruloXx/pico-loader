@@ -224,6 +224,11 @@ patch_vblankhotkey_handler:
     ldr r2, [r1, #0x2C]
     str r2, [r0], #4          // DMA3 CNT
 
+    mrc p15, 0, r2, c9, c1, 0
+    str r2, [r0], #4          // DTCM control register
+    mrc p15, 0, r2, c9, c1, 1
+    str r2, [r0], #4          // ITCM control register
+
     ldr r0, arm9ItcmBuffer0Address
     ldr r1, arm9ItcmSourceAddress
     ldr r2, arm9ItcmChunkSize

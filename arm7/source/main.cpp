@@ -221,8 +221,8 @@ static void handlePendingSaveStateDump()
 
     save_state_file_header_v7_t header
     {
-        .magic              = SAVE_STATE_FILE_MAGIC_V7,
-        .version            = SAVE_STATE_FILE_VERSION_V7,
+        .magic              = SAVE_STATE_FILE_MAGIC_V8,
+        .version            = SAVE_STATE_FILE_VERSION_V8,
         .arm9ContextOffset  = kHeaderSize,
         .arm9ContextSize    = sizeof(save_state_cpu_context_t),
         .arm7ContextOffset  = kHeaderSize + sizeof(save_state_cpu_context_t),
@@ -361,7 +361,7 @@ static void handlePendingSaveStateDump()
     }
 
     clearPendingSaveStateMarkers();
-    LOG_DEBUG("Savestate v7 dump written to %s\n", gLoaderHeader.loadParams.savePath);
+    LOG_DEBUG("Savestate v8 dump written to %s\n", gLoaderHeader.loadParams.savePath);
 }
 
 static void clearSoundRegisters()

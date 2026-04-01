@@ -22,6 +22,9 @@
 #define ITCM_BASE         0x01000000
 #define ITCM_CHUNK_SIZE   0x00004000
 #define ITCM_MAX_SIZE     0x00008000
+#define IO_STATE_BASE     0x023FF100
+#define IO_DTCM_CONTROL   268
+#define IO_ITCM_CONTROL   272
 #define CTX_SPSR          8
 #define CTX_IRQ_SP        12
 #define CTX_LR            16
@@ -87,6 +90,19 @@ clear_itcm_info:
     str r0, [r4]
 
 skip_itcm_restore:
+    // --- Restore ARM9 TCM control registers if captured ---
+    ldr r4, io_state_addr
+    ldr r2, [r4, #IO_DTCM_CONTROL]
+    cmp r2, #0
+    beq skip_dtcm_control_restore
+    mcr p15, 0, r2, c9, c1, 0
+skip_dtcm_control_restore:
+    ldr r2, [r4, #IO_ITCM_CONTROL]
+    cmp r2, #0
+    beq skip_itcm_control_restore
+    mcr p15, 0, r2, c9, c1, 1
+skip_itcm_control_restore:
+
     // --- Valid context found: consume it (clear magic) ---
     mov r2, #0
     str r2, [r1]                    // clear magic so it won't be used again
@@ -165,6 +181,8 @@ itcm_buffer1_addr:
     .word ITCM_BUFFER1_BASE
 itcm_info_addr:
     .word ITCM_INFO_BASE
+io_state_addr:
+    .word IO_STATE_BASE
 itcm_magic_val:
     .word ITCM_MAGIC
 itcm_base_addr:

@@ -9,6 +9,8 @@
 #define SAVE_STATE_FILE_MAGIC_V5   0x34535350u // PSS4
 #define SAVE_STATE_FILE_MAGIC_V6   0x35535350u // PSS5
 #define SAVE_STATE_FILE_MAGIC_V7   0x36535350u // PSS6
+#define SAVE_STATE_FILE_MAGIC_V8   0x37535350u // PSS7
+#define SAVE_STATE_FILE_VERSION_V8 8u
 #define SAVE_STATE_FILE_VERSION_V7 7u
 #define SAVE_STATE_FILE_VERSION_V6 6u
 #define SAVE_STATE_FILE_VERSION_V5 5u
@@ -104,9 +106,11 @@ struct save_state_arm9_io_state_t
     u32 dmaSad[4];
     u32 dmaDad[4];
     u32 dmaCnt[4];
+    u32 dtcmControl;
+    u32 itcmControl;
 };
 
-static_assert(sizeof(save_state_arm9_io_state_t) == 268);
+static_assert(sizeof(save_state_arm9_io_state_t) == 276);
 
 struct save_state_arm7_dma_channel_t
 {
