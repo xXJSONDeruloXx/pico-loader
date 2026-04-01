@@ -54,6 +54,38 @@ hotkeystatecapture_entry:
     mov r1, r12
     stmia r0!, {r1}
 
+    // Capture a small set of ARM7 IO state.
+    ldr r0, ioStateAddress
+    ldr r1, ioStateMagic
+    stmia r0!, {r1}
+
+    ldr r2, =0x04000100
+    ldr r1, [r2, #0x0]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0x4]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0x8]
+    stmia r0!, {r1}
+    ldr r1, [r2, #0xC]
+    stmia r0!, {r1}
+
+    ldr r2, =0x04000210
+    ldr r1, [r2]
+    stmia r0!, {r1}
+    ldr r2, =0x04000208
+    ldr r1, [r2]
+    stmia r0!, {r1}
+
+    ldr r2, =0x04000500
+    ldrh r1, [r2]
+    stmia r0!, {r1}
+    ldr r2, =0x04000508
+    ldrb r1, [r2]
+    ldrb r3, [r2, #1]
+    lsls r3, r3, #8
+    orrs r1, r3
+    stmia r0!, {r1}
+
     pop {r0-r7, pc}
 
 .balign 4
@@ -61,6 +93,10 @@ contextAddress:
     .word 0x023FF080
 contextMagic:
     .word 0x43545831
+ioStateAddress:
+    .word 0x023FF1C0
+ioStateMagic:
+    .word 0x494F5431
 
 .pool
 .end

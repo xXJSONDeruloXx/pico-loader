@@ -961,6 +961,61 @@ void NdsLoader::HandleDldiPatching()
     }
 }
 
+static void restoreArm7IoState()
+{
+    auto ioState = (volatile save_state_arm7_io_state_t*)SAVE_STATE_ARM7_IO_STATE_ADDRESS;
+    if (ioState->magic != SAVE_STATE_IO_MAGIC)
+    {
+        return;
+    }
+
+    ioState->magic = 0;
+    *(vu16*)0x04000100 = (u16)ioState->timer0;
+    *(vu16*)0x04000102 = (u16)(ioState->timer0 >> 16);
+    *(vu16*)0x04000104 = (u16)ioState->timer1;
+    *(vu16*)0x04000106 = (u16)(ioState->timer1 >> 16);
+    *(vu16*)0x04000108 = (u16)ioState->timer2;
+    *(vu16*)0x0400010A = (u16)(ioState->timer2 >> 16);
+    *(vu16*)0x0400010C = (u16)ioState->timer3;
+    *(vu16*)0x0400010E = (u16)(ioState->timer3 >> 16);
+    REG_IE = ioState->ie;
+    *(vu16*)0x04000500 = (u16)ioState->soundCnt;
+    *(vu8*)0x04000508 = (u8)ioState->sndCapCnt;
+    *(vu8*)0x04000509 = (u8)(ioState->sndCapCnt >> 8);
+    REG_IME = ioState->ime;
+}
+
+static bool restoreArm9VramState(FIL& file, u32 fileOffset, u32 size)
+{
+    if (f_lseek(&file, fileOffset) != FR_OK)
+    {
+        return false;
+    }
+
+    UINT bytesRead = 0;
+    for (u32 offset = 0; offset < size; offset += SAVE_STATE_TRANSFER_BUFFER_SIZE)
+    {
+        u32 chunkSize = size - offset;
+        if (chunkSize > SAVE_STATE_TRANSFER_BUFFER_SIZE)
+            chunkSize = SAVE_STATE_TRANSFER_BUFFER_SIZE;
+
+        if (f_read(&file, (void*)SAVE_STATE_TRANSFER_BUFFER_ADDRESS, chunkSize, &bytesRead) != FR_OK || bytesRead != chunkSize)
+        {
+            return false;
+        }
+
+        sendToArm9(IPC_COMMAND_ARM9_RESTORE_VRAM_CHUNK);
+        sendToArm9(offset);
+        sendToArm9(chunkSize);
+        if (receiveFromArm9() == 0)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void NdsLoader::StartRom(BootMode bootMode)
 {
     LOG_DEBUG("Booting...\n");
@@ -976,6 +1031,7 @@ void NdsLoader::StartRom(BootMode bootMode)
         REG_IF2 = ~0u;
     }
 
+    restoreArm7IoState();
     ((entrypoint_t)_romHeader.arm7EntryAddress)();
 }
 
@@ -1110,24 +1166,77 @@ bool NdsLoader::TryRestoreSaveState()
         return false;
     }
 
+    u32 version = header.version;
     u32 ramOffset = 0;
     u32 ramSize = 0;
-    bool hasExplicitContexts [[maybe_unused]] = false;
+    u32 sharedWramOffset = 0;
+    u32 sharedWramSize = 0;
+    u32 arm7WramOffset = 0;
+    u32 arm7WramSize = 0;
+    u32 vramOffset = 0;
+    u32 vramSize = 0;
+    u32 paletteOffset = 0;
+    u32 paletteSize = 0;
+    u32 oamOffset = 0;
+    u32 oamSize = 0;
 
     auto tryReadContext = [&](u32 offset, u32 size, void* dest) -> bool {
-        if (size != sizeof(save_state_cpu_context_t)) return true; // skip if wrong size
+        if (size != sizeof(save_state_cpu_context_t)) return true;
         return f_lseek(&file, offset) == FR_OK &&
                f_read(&file, dest, sizeof(save_state_cpu_context_t), &bytesRead) == FR_OK &&
                bytesRead == sizeof(save_state_cpu_context_t);
     };
 
-    if (header.magic == SAVE_STATE_FILE_MAGIC_V3 &&
+    if (header.magic == SAVE_STATE_FILE_MAGIC_V4 &&
+        header.version == SAVE_STATE_FILE_VERSION_V4)
+    {
+        save_state_file_header_v4_t headerV4 {};
+        if (f_lseek(&file, 0) != FR_OK ||
+            f_read(&file, &headerV4, sizeof(headerV4), &bytesRead) != FR_OK ||
+            bytesRead != sizeof(headerV4))
+        {
+            f_close(&file);
+            return false;
+        }
+
+        if (headerV4.ramSize != 0x400000)
+        {
+            f_close(&file);
+            return false;
+        }
+
+        ramOffset = headerV4.ramOffset;
+        ramSize = headerV4.ramSize;
+        sharedWramOffset = headerV4.sharedWramOffset;
+        sharedWramSize = headerV4.sharedWramSize;
+        arm7WramOffset = headerV4.arm7WramOffset;
+        arm7WramSize = headerV4.arm7WramSize;
+        vramOffset = headerV4.vramOffset;
+        vramSize = headerV4.vramSize;
+        paletteOffset = headerV4.paletteOffset;
+        paletteSize = headerV4.paletteSize;
+        oamOffset = headerV4.oamOffset;
+        oamSize = headerV4.oamSize;
+
+        if (!tryReadContext(headerV4.arm9ContextOffset, headerV4.arm9ContextSize,
+                            (void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS) ||
+            !tryReadContext(headerV4.arm7ContextOffset, headerV4.arm7ContextSize,
+                            (void*)SAVE_STATE_ARM7_CONTEXT_ADDRESS))
+        {
+            f_close(&file);
+            return false;
+        }
+    }
+    else if (header.magic == SAVE_STATE_FILE_MAGIC_V3 &&
         header.version == SAVE_STATE_FILE_VERSION_V3 &&
         header.ramSize == 0x400000)
     {
-        hasExplicitContexts = true;
         ramOffset = header.ramOffset;
-        ramSize   = header.ramSize;
+        ramSize = header.ramSize;
+        paletteOffset = header.paletteOffset;
+        paletteSize = header.paletteSize;
+        oamOffset = header.oamOffset;
+        oamSize = header.oamSize;
         if (!tryReadContext(header.arm9ContextOffset, header.arm9ContextSize,
                             (void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS) ||
             !tryReadContext(header.arm7ContextOffset, header.arm7ContextSize,
@@ -1141,10 +1250,8 @@ bool NdsLoader::TryRestoreSaveState()
         header.version == SAVE_STATE_FILE_VERSION_V2 &&
         header.ramSize == 0x400000)
     {
-        hasExplicitContexts = true;
         ramOffset = header.ramOffset;
         ramSize = header.ramSize;
-
         if (!tryReadContext(header.arm9ContextOffset, header.arm9ContextSize,
                             (void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS) ||
             !tryReadContext(header.arm7ContextOffset, header.arm7ContextSize,
@@ -1156,7 +1263,6 @@ bool NdsLoader::TryRestoreSaveState()
     }
     else if (header.magic == SAVE_STATE_FILE_MAGIC_V1 && header.version == 1 && header.arm9ContextOffset == 0x400000)
     {
-        // Compatibility with the old v1 format, where the third word was ramSize.
         ramOffset = 12;
         ramSize = header.arm9ContextOffset;
     }
@@ -1186,21 +1292,54 @@ bool NdsLoader::TryRestoreSaveState()
         }
     }
 
-    // Restore palette and OAM for v3 files
-    if (header.magic == SAVE_STATE_FILE_MAGIC_V3 &&
-        header.paletteSize > 0 && header.oamSize > 0)
+    if (sharedWramSize > 0)
     {
-        if (f_lseek(&file, header.paletteOffset) != FR_OK ||
-            f_read(&file, (void*)0x05000000, header.paletteSize, &bytesRead) != FR_OK ||
-            bytesRead != header.paletteSize)
+        if (f_lseek(&file, sharedWramOffset) != FR_OK ||
+            f_read(&file, (void*)0x03000000, sharedWramSize, &bytesRead) != FR_OK ||
+            bytesRead != sharedWramSize)
+        {
+            LOG_ERROR("Failed to restore shared WRAM\n");
+            f_close(&file);
+            return false;
+        }
+    }
+
+    if (arm7WramSize > 0)
+    {
+        if (f_lseek(&file, arm7WramOffset) != FR_OK ||
+            f_read(&file, (void*)0x03800000, arm7WramSize, &bytesRead) != FR_OK ||
+            bytesRead != arm7WramSize)
+        {
+            LOG_ERROR("Failed to restore ARM7 WRAM\n");
+            f_close(&file);
+            return false;
+        }
+    }
+
+    if (vramSize > 0 && !restoreArm9VramState(file, vramOffset, vramSize))
+    {
+        LOG_ERROR("Failed to restore VRAM\n");
+        f_close(&file);
+        return false;
+    }
+
+    if (paletteSize > 0)
+    {
+        if (f_lseek(&file, paletteOffset) != FR_OK ||
+            f_read(&file, (void*)0x05000000, paletteSize, &bytesRead) != FR_OK ||
+            bytesRead != paletteSize)
         {
             LOG_ERROR("Failed to restore palette\n");
             f_close(&file);
             return false;
         }
-        if (f_lseek(&file, header.oamOffset) != FR_OK ||
-            f_read(&file, (void*)0x07000000, header.oamSize, &bytesRead) != FR_OK ||
-            bytesRead != header.oamSize)
+    }
+
+    if (oamSize > 0)
+    {
+        if (f_lseek(&file, oamOffset) != FR_OK ||
+            f_read(&file, (void*)0x07000000, oamSize, &bytesRead) != FR_OK ||
+            bytesRead != oamSize)
         {
             LOG_ERROR("Failed to restore OAM\n");
             f_close(&file);
@@ -1209,7 +1348,7 @@ bool NdsLoader::TryRestoreSaveState()
     }
 
     f_close(&file);
-    LOG_DEBUG("Restored savestate v%d dump from %s\n", header.version, _saveStatePath);
+    LOG_DEBUG("Restored savestate v%d dump from %s\n", version, _saveStatePath);
     return true;
 }
 

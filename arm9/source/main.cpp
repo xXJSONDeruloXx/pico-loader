@@ -52,6 +52,7 @@ static u16 sIsCloneBootRom;
 static loader_info_t sLoaderInfo;
 static void** sSoftResetCheatsPointer = nullptr;
 static const void* sHotkeyResetArm7Function = nullptr;
+static bool sIsResumeState = false;
 
 u16 gIsDsiMode;
 
@@ -63,6 +64,119 @@ static u32 receiveFromArm7()
 {
     while (ipc_isRecvFifoEmpty());
     return ipc_recvWordDirect();
+}
+
+static bool hasPendingSaveStateDump()
+{
+    return NTR_SHARED_MEMORY->mainMemoryCmd == MAIN_MEMORY_CMD_SAVE_STATE_DUMP ||
+        NTR_SHARED_MEMORY_SDK5->mainMemoryCmd == MAIN_MEMORY_CMD_SAVE_STATE_DUMP ||
+        (*(volatile u32*)SAVE_STATE_ARM9_CONTEXT_ADDRESS) == SAVE_STATE_CONTEXT_MAGIC ||
+        ((volatile save_state_arm9_io_state_t*)SAVE_STATE_ARM9_IO_STATE_ADDRESS)->magic == SAVE_STATE_IO_MAGIC;
+}
+
+struct save_state_vram_mapping_t
+{
+    u8 a;
+    u8 b;
+    u8 c;
+    u8 d;
+    u8 e;
+    u8 f;
+    u8 g;
+    u8 h;
+    u8 i;
+};
+
+static save_state_vram_mapping_t getCurrentVramMappings()
+{
+    return {
+        .a = REG_VRAMCNT_A,
+        .b = REG_VRAMCNT_B,
+        .c = REG_VRAMCNT_C,
+        .d = REG_VRAMCNT_D,
+        .e = REG_VRAMCNT_E,
+        .f = REG_VRAMCNT_F,
+        .g = REG_VRAMCNT_G,
+        .h = REG_VRAMCNT_H,
+        .i = REG_VRAMCNT_I,
+    };
+}
+
+static save_state_vram_mapping_t getRestoreVramMappings()
+{
+    auto ioState = (volatile save_state_arm9_io_state_t*)SAVE_STATE_ARM9_IO_STATE_ADDRESS;
+    if (ioState->magic != SAVE_STATE_IO_MAGIC)
+    {
+        return getCurrentVramMappings();
+    }
+
+    return {
+        .a = (u8)ioState->vramCntA,
+        .b = (u8)ioState->vramCntB,
+        .c = (u8)ioState->vramCntC,
+        .d = (u8)ioState->vramCntD,
+        .e = (u8)ioState->vramCntE,
+        .f = (u8)ioState->vramCntF,
+        .g = (u8)ioState->vramCntG,
+        .h = (u8)ioState->vramCntH,
+        .i = (u8)ioState->vramCntI,
+    };
+}
+
+static void setAllVramBanksToLcdc()
+{
+    REG_VRAMCNT_A = MEM_VRAM_AB_LCDC;
+    REG_VRAMCNT_B = MEM_VRAM_AB_LCDC;
+    REG_VRAMCNT_C = MEM_VRAM_C_LCDC;
+    REG_VRAMCNT_D = MEM_VRAM_D_LCDC;
+    REG_VRAMCNT_E = MEM_VRAM_E_LCDC;
+    REG_VRAMCNT_F = MEM_VRAM_FG_LCDC;
+    REG_VRAMCNT_G = MEM_VRAM_FG_LCDC;
+    REG_VRAMCNT_H = MEM_VRAM_H_LCDC;
+    REG_VRAMCNT_I = MEM_VRAM_I_LCDC;
+}
+
+static void restoreVramMappings(save_state_vram_mapping_t mappings)
+{
+    REG_VRAMCNT_A = mappings.a;
+    REG_VRAMCNT_B = mappings.b;
+    REG_VRAMCNT_C = mappings.c;
+    REG_VRAMCNT_D = mappings.d;
+    REG_VRAMCNT_E = mappings.e;
+    REG_VRAMCNT_F = mappings.f;
+    REG_VRAMCNT_G = mappings.g;
+    REG_VRAMCNT_H = mappings.h;
+    REG_VRAMCNT_I = mappings.i;
+}
+
+static bool copyVramChunk(void* buffer, u32 offset, u32 size, bool restoreSavedMappings)
+{
+    constexpr u32 kVramSize = 0xA4000;
+    if (offset > kVramSize || size > kVramSize - offset)
+    {
+        return false;
+    }
+
+    auto mappings = restoreSavedMappings ? getRestoreVramMappings() : getCurrentVramMappings();
+    setAllVramBanksToLcdc();
+    memcpy(buffer, (const void*)(0x06800000 + offset), size);
+    restoreVramMappings(mappings);
+    return true;
+}
+
+static bool restoreVramChunk(const void* buffer, u32 offset, u32 size)
+{
+    constexpr u32 kVramSize = 0xA4000;
+    if (offset > kVramSize || size > kVramSize - offset)
+    {
+        return false;
+    }
+
+    auto mappings = getRestoreVramMappings();
+    setAllVramBanksToLcdc();
+    memcpy((void*)(0x06800000 + offset), buffer, size);
+    restoreVramMappings(mappings);
+    return true;
 }
 
 extern "C" void __libc_init_array();
@@ -122,6 +236,15 @@ static void restoreArm9IoState()
     *(vu32*)0x04000108 = ioState->timer2;
     *(vu32*)0x0400010C = ioState->timer3;
     *(vu32*)0x04000210 = ioState->ie;
+    *(vu8*)0x04000240 = (u8)ioState->vramCntA;
+    *(vu8*)0x04000241 = (u8)ioState->vramCntB;
+    *(vu8*)0x04000242 = (u8)ioState->vramCntC;
+    *(vu8*)0x04000243 = (u8)ioState->vramCntD;
+    *(vu8*)0x04000244 = (u8)ioState->vramCntE;
+    *(vu8*)0x04000245 = (u8)ioState->vramCntF;
+    *(vu8*)0x04000246 = (u8)ioState->vramCntG;
+    *(vu8*)0x04000248 = (u8)ioState->vramCntH;
+    *(vu8*)0x04000249 = (u8)ioState->vramCntI;
 
     *(vu32*)0x04000010 = ioState->bgOfsMain0;
     *(vu32*)0x04000014 = ioState->bgOfsMain1;
@@ -159,15 +282,18 @@ static void restoreArm9IoState()
 [[gnu::noinline, gnu::section(".itcm")]]
 static void bootArm9()
 {
-    mem_setVramAMapping(MEM_VRAM_AB_LCDC);
-    fastClear((void*)0x06800000, 0x20000); // VRAM A
-    mem_setVramAMapping(MEM_VRAM_AB_NONE);
-    // By now it should be safe to unmap the arm7 memory
-    mem_setVramCMapping(MEM_VRAM_C_LCDC);
-    mem_setVramDMapping(MEM_VRAM_D_LCDC);
-    fastClear((void*)0x06840000, 0x40000); // VRAM C and D
-    mem_setVramCMapping(MEM_VRAM_C_NONE);
-    mem_setVramDMapping(MEM_VRAM_D_NONE);
+    if (!sIsResumeState)
+    {
+        mem_setVramAMapping(MEM_VRAM_AB_LCDC);
+        fastClear((void*)0x06800000, 0x20000); // VRAM A
+        mem_setVramAMapping(MEM_VRAM_AB_NONE);
+        // By now it should be safe to unmap the arm7 memory
+        mem_setVramCMapping(MEM_VRAM_C_LCDC);
+        mem_setVramDMapping(MEM_VRAM_D_LCDC);
+        fastClear((void*)0x06840000, 0x40000); // VRAM C and D
+        mem_setVramCMapping(MEM_VRAM_C_NONE);
+        mem_setVramDMapping(MEM_VRAM_D_NONE);
+    }
 
     if (((REG_SCFG_EXT >> 14) & 3) == 0)
     {
@@ -305,6 +431,7 @@ static void handleBootCommand()
 {
     bool isSdkResetSystem = receiveFromArm7() != 0;
     bool isResumeState = receiveFromArm7() != 0;
+    sIsResumeState = isResumeState;
     REG_EXMEMCNT &= ~0x0880; // map ds and gba slot to arm9
     sLoaderPlatform->PrepareRomBoot(sRomDirSector, sRomDirSectorOffset);
     // On resume, use soft-reset style IO clearing to preserve display state
@@ -320,6 +447,20 @@ static void handleBootCommand()
         REG_SCFG_RST = 1;
     }
     bootArm9();
+}
+
+static void handleCopyVramChunkCommand()
+{
+    u32 offset = receiveFromArm7();
+    u32 size = receiveFromArm7();
+    ipc_sendWordDirect(copyVramChunk((void*)SAVE_STATE_TRANSFER_BUFFER_ADDRESS, offset, size, false) ? 1 : 0);
+}
+
+static void handleRestoreVramChunkCommand()
+{
+    u32 offset = receiveFromArm7();
+    u32 size = receiveFromArm7();
+    ipc_sendWordDirect(restoreVramChunk((const void*)SAVE_STATE_TRANSFER_BUFFER_ADDRESS, offset, size) ? 1 : 0);
 }
 
 static void handleSetupHomebrewBootstub(u32 dldiRequiredSpace)
@@ -425,6 +566,16 @@ static void handleArm7Command(u32 command)
             handleSetupHomebrewBootstub(dldiRequiredSpace);
             break;
         }
+        case IPC_COMMAND_ARM9_COPY_VRAM_CHUNK:
+        {
+            handleCopyVramChunkCommand();
+            break;
+        }
+        case IPC_COMMAND_ARM9_RESTORE_VRAM_CHUNK:
+        {
+            handleRestoreVramChunkCommand();
+            break;
+        }
     }
 }
 
@@ -432,7 +583,10 @@ extern "C" void loaderMain()
 {
     __libc_init_array();
 
-    clearGraphicsMemory();
+    if (!hasPendingSaveStateDump())
+    {
+        clearGraphicsMemory();
+    }
 
     while (ipc_getArm7SyncBits() != HANDSHAKE_PART0);
     ipc_setArm9SyncBits(HANDSHAKE_PART0);

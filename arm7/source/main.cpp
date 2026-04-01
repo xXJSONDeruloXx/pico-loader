@@ -21,6 +21,7 @@
 #include "ndsHeader.h"
 #include "globalHeap.h"
 #include "mmc/tmio.h"
+#include "ipcCommands.h"
 
 #define HANDSHAKE_PART0     0xA
 #define HANDSHAKE_PART1     0xB
@@ -129,6 +130,20 @@ static void handleSavePath()
     sLoader.SetSavePath(gLoaderHeader.loadParams.savePath);
 }
 
+static u32 receiveFromArm9()
+{
+    while (ipc_isRecvFifoEmpty());
+    return ipc_recvWordDirect();
+}
+
+static bool requestArm9VramChunk(u32 command, u32 offset, u32 size)
+{
+    ipc_sendWordDirect(command);
+    ipc_sendWordDirect(offset);
+    ipc_sendWordDirect(size);
+    return receiveFromArm9() != 0;
+}
+
 static void handlePendingSaveStateDump()
 {
     if (NTR_SHARED_MEMORY->mainMemoryCmd != MAIN_MEMORY_CMD_SAVE_STATE_DUMP &&
@@ -137,12 +152,19 @@ static void handlePendingSaveStateDump()
         return;
     }
 
-    NTR_SHARED_MEMORY->mainMemoryCmd = MAIN_MEMORY_CMD_NONE;
-    NTR_SHARED_MEMORY_SDK5->mainMemoryCmd = MAIN_MEMORY_CMD_NONE;
+    auto clearPendingSaveStateMarkers = []() {
+        NTR_SHARED_MEMORY->mainMemoryCmd = MAIN_MEMORY_CMD_NONE;
+        NTR_SHARED_MEMORY_SDK5->mainMemoryCmd = MAIN_MEMORY_CMD_NONE;
+        *(volatile u32*)SAVE_STATE_ARM9_CONTEXT_ADDRESS = 0;
+        *(volatile u32*)SAVE_STATE_ARM7_CONTEXT_ADDRESS = 0;
+        ((volatile save_state_arm9_io_state_t*)SAVE_STATE_ARM9_IO_STATE_ADDRESS)->magic = 0;
+        ((volatile save_state_arm7_io_state_t*)SAVE_STATE_ARM7_IO_STATE_ADDRESS)->magic = 0;
+    };
 
     if (gLoaderHeader.loadParams.savePath[0] == 0)
     {
         LOG_ERROR("Savestate dump requested, but no path was provided\n");
+        clearPendingSaveStateMarkers();
         return;
     }
 
@@ -150,35 +172,49 @@ static void handlePendingSaveStateDump()
     if (f_open(&file, gLoaderHeader.loadParams.savePath, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
     {
         LOG_ERROR("Failed to open savestate dump file: %s\n", gLoaderHeader.loadParams.savePath);
+        clearPendingSaveStateMarkers();
         return;
     }
 
-    constexpr u32 kPaletteBase   = 0x05000000;
-    constexpr u32 kPaletteSize   = 0x800;
-    constexpr u32 kOamBase       = 0x07000000;
-    constexpr u32 kOamSize       = 0x800;
+    constexpr u32 kPaletteBase      = 0x05000000;
+    constexpr u32 kPaletteSize      = 0x800;
+    constexpr u32 kOamBase          = 0x07000000;
+    constexpr u32 kOamSize          = 0x800;
+    constexpr u32 kRamBase          = 0x02000000;
+    constexpr u32 kRamSize          = 0x400000u;
+    constexpr u32 kSharedWramBase   = 0x03000000;
+    constexpr u32 kSharedWramSize   = 0x8000;
+    constexpr u32 kArm7WramBase     = 0x03800000;
+    constexpr u32 kArm7WramSize     = 0x10000;
+    constexpr u32 kVramSize         = 0xA4000;
+    constexpr u32 kHeaderSize       = sizeof(save_state_file_header_v4_t);
+    constexpr u32 kContextBlockSize = kHeaderSize + sizeof(save_state_cpu_context_t) * 2;
+    constexpr u32 kSharedWramOff    = kContextBlockSize + kRamSize;
+    constexpr u32 kArm7WramOff      = kSharedWramOff + kSharedWramSize;
+    constexpr u32 kVramOff          = kArm7WramOff + kArm7WramSize;
+    constexpr u32 kPaletteOff       = kVramOff + kVramSize;
+    constexpr u32 kOamOff           = kPaletteOff + kPaletteSize;
 
-    constexpr u32 kCtxBlockSize  = sizeof(save_state_file_header_t) + sizeof(save_state_cpu_context_t) * 2;
-    constexpr u32 kRamSize       = 0x400000u;
-    constexpr u32 kPaletteOff    = kCtxBlockSize + kRamSize;
-    constexpr u32 kOamOff        = kPaletteOff + kPaletteSize;
-
-    save_state_file_header_t header
+    save_state_file_header_v4_t header
     {
-        .magic              = SAVE_STATE_FILE_MAGIC_V3,
-        .version            = SAVE_STATE_FILE_VERSION_V3,
-        .arm9ContextOffset  = sizeof(save_state_file_header_t),
+        .magic              = SAVE_STATE_FILE_MAGIC_V4,
+        .version            = SAVE_STATE_FILE_VERSION_V4,
+        .arm9ContextOffset  = kHeaderSize,
         .arm9ContextSize    = sizeof(save_state_cpu_context_t),
-        .arm7ContextOffset  = sizeof(save_state_file_header_t) + sizeof(save_state_cpu_context_t),
+        .arm7ContextOffset  = kHeaderSize + sizeof(save_state_cpu_context_t),
         .arm7ContextSize    = sizeof(save_state_cpu_context_t),
-        .ramOffset          = kCtxBlockSize,
+        .ramOffset          = kContextBlockSize,
         .ramSize            = kRamSize,
-        .vramOffset         = 0,
-        .vramSize           = 0,
-        .oamOffset          = kOamOff,
-        .oamSize            = kOamSize,
+        .sharedWramOffset   = kSharedWramOff,
+        .sharedWramSize     = kSharedWramSize,
+        .arm7WramOffset     = kArm7WramOff,
+        .arm7WramSize       = kArm7WramSize,
+        .vramOffset         = kVramOff,
+        .vramSize           = kVramSize,
         .paletteOffset      = kPaletteOff,
         .paletteSize        = kPaletteSize,
+        .oamOffset          = kOamOff,
+        .oamSize            = kOamSize,
     };
 
     UINT bytesWritten = 0;
@@ -186,6 +222,7 @@ static void handlePendingSaveStateDump()
     {
         LOG_ERROR("Failed to write savestate header\n");
         f_close(&file);
+        clearPendingSaveStateMarkers();
         return;
     }
 
@@ -193,6 +230,7 @@ static void handlePendingSaveStateDump()
     {
         LOG_ERROR("Failed to write ARM9 savestate context\n");
         f_close(&file);
+        clearPendingSaveStateMarkers();
         return;
     }
 
@@ -200,47 +238,90 @@ static void handlePendingSaveStateDump()
     {
         LOG_ERROR("Failed to write ARM7 savestate context\n");
         f_close(&file);
+        clearPendingSaveStateMarkers();
         return;
     }
 
-    constexpr u32 kChunkSize = 64 * 1024;
+    constexpr u32 kChunkSize = SAVE_STATE_TRANSFER_BUFFER_SIZE;
     for (u32 offset = 0; offset < header.ramSize; offset += kChunkSize)
     {
         u32 chunkSize = header.ramSize - offset;
         if (chunkSize > kChunkSize)
             chunkSize = kChunkSize;
 
-        if (f_write(&file, (const void*)(0x02000000 + offset), chunkSize, &bytesWritten) != FR_OK || bytesWritten != chunkSize)
+        if (f_write(&file, (const void*)(kRamBase + offset), chunkSize, &bytesWritten) != FR_OK || bytesWritten != chunkSize)
         {
-            LOG_ERROR("Failed while writing savestate dump at offset 0x%x\n", offset);
+            LOG_ERROR("Failed while writing savestate dump at RAM offset 0x%x\n", offset);
             f_close(&file);
+            clearPendingSaveStateMarkers();
             return;
         }
     }
 
-    // Write palette RAM
+    if (f_write(&file, (const void*)kSharedWramBase, kSharedWramSize, &bytesWritten) != FR_OK || bytesWritten != kSharedWramSize)
+    {
+        LOG_ERROR("Failed to write shared WRAM savestate section\n");
+        f_close(&file);
+        clearPendingSaveStateMarkers();
+        return;
+    }
+
+    if (f_write(&file, (const void*)kArm7WramBase, kArm7WramSize, &bytesWritten) != FR_OK || bytesWritten != kArm7WramSize)
+    {
+        LOG_ERROR("Failed to write ARM7 WRAM savestate section\n");
+        f_close(&file);
+        clearPendingSaveStateMarkers();
+        return;
+    }
+
+    for (u32 offset = 0; offset < header.vramSize; offset += kChunkSize)
+    {
+        u32 chunkSize = header.vramSize - offset;
+        if (chunkSize > kChunkSize)
+            chunkSize = kChunkSize;
+
+        if (!requestArm9VramChunk(IPC_COMMAND_ARM9_COPY_VRAM_CHUNK, offset, chunkSize))
+        {
+            LOG_ERROR("Failed to copy VRAM savestate chunk at offset 0x%x\n", offset);
+            f_close(&file);
+            clearPendingSaveStateMarkers();
+            return;
+        }
+
+        if (f_write(&file, (const void*)SAVE_STATE_TRANSFER_BUFFER_ADDRESS, chunkSize, &bytesWritten) != FR_OK || bytesWritten != chunkSize)
+        {
+            LOG_ERROR("Failed to write VRAM savestate section at offset 0x%x\n", offset);
+            f_close(&file);
+            clearPendingSaveStateMarkers();
+            return;
+        }
+    }
+
     if (f_write(&file, (const void*)kPaletteBase, kPaletteSize, &bytesWritten) != FR_OK || bytesWritten != kPaletteSize)
     {
         LOG_ERROR("Failed to write palette savestate section\n");
         f_close(&file);
+        clearPendingSaveStateMarkers();
         return;
     }
 
-    // Write OAM
     if (f_write(&file, (const void*)kOamBase, kOamSize, &bytesWritten) != FR_OK || bytesWritten != kOamSize)
     {
         LOG_ERROR("Failed to write OAM savestate section\n");
         f_close(&file);
+        clearPendingSaveStateMarkers();
         return;
     }
 
     if (f_close(&file) != FR_OK)
     {
         LOG_ERROR("Failed to close savestate dump file\n");
+        clearPendingSaveStateMarkers();
         return;
     }
 
-    LOG_DEBUG("Savestate v3 dump written to %s\n", gLoaderHeader.loadParams.savePath);
+    clearPendingSaveStateMarkers();
+    LOG_DEBUG("Savestate v4 dump written to %s\n", gLoaderHeader.loadParams.savePath);
 }
 
 static void clearSoundRegisters()

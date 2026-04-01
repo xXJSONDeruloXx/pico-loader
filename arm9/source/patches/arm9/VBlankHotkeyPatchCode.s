@@ -105,6 +105,26 @@ patch_vblankhotkey_handler:
     ldr r2, [r1]
     str r2, [r0], #4          // REG_IME
 
+    ldr r1, =0x04000240
+    ldrb r2, [r1, #0x0]
+    str r2, [r0], #4          // REG_VRAMCNT_A
+    ldrb r2, [r1, #0x1]
+    str r2, [r0], #4          // REG_VRAMCNT_B
+    ldrb r2, [r1, #0x2]
+    str r2, [r0], #4          // REG_VRAMCNT_C
+    ldrb r2, [r1, #0x3]
+    str r2, [r0], #4          // REG_VRAMCNT_D
+    ldrb r2, [r1, #0x4]
+    str r2, [r0], #4          // REG_VRAMCNT_E
+    ldrb r2, [r1, #0x5]
+    str r2, [r0], #4          // REG_VRAMCNT_F
+    ldrb r2, [r1, #0x6]
+    str r2, [r0], #4          // REG_VRAMCNT_G
+    ldrb r2, [r1, #0x8]
+    str r2, [r0], #4          // REG_VRAMCNT_H
+    ldrb r2, [r1, #0x9]
+    str r2, [r0], #4          // REG_VRAMCNT_I
+
     ldr r1, =0x04000010
     ldr r2, [r1, #0x0]
     str r2, [r0], #4          // BG0HOFS/VOFS

@@ -5,6 +5,8 @@
 #define SAVE_STATE_FILE_MAGIC_V1   0x30535350u // PSS0
 #define SAVE_STATE_FILE_MAGIC_V2   0x31535350u // PSS1
 #define SAVE_STATE_FILE_MAGIC_V3   0x32535350u // PSS2
+#define SAVE_STATE_FILE_MAGIC_V4   0x33535350u // PSS3
+#define SAVE_STATE_FILE_VERSION_V4 4u
 #define SAVE_STATE_FILE_VERSION_V3 3u
 #define SAVE_STATE_FILE_VERSION_V2 2u
 #define SAVE_STATE_CONTEXT_MAGIC   0x43545831u
@@ -46,6 +48,16 @@ struct save_state_arm9_io_state_t
     u32 ie;
     u32 ime;
 
+    u32 vramCntA;
+    u32 vramCntB;
+    u32 vramCntC;
+    u32 vramCntD;
+    u32 vramCntE;
+    u32 vramCntF;
+    u32 vramCntG;
+    u32 vramCntH;
+    u32 vramCntI;
+
     u32 bgOfsMain0;
     u32 bgOfsMain1;
     u32 bgOfsMain2;
@@ -77,7 +89,22 @@ struct save_state_arm9_io_state_t
     u32 blendSub1;
 };
 
-static_assert(sizeof(save_state_arm9_io_state_t) == 184);
+static_assert(sizeof(save_state_arm9_io_state_t) == 220);
+
+struct save_state_arm7_io_state_t
+{
+    u32 magic;
+    u32 timer0;
+    u32 timer1;
+    u32 timer2;
+    u32 timer3;
+    u32 ie;
+    u32 ime;
+    u32 soundCnt;
+    u32 sndCapCnt;
+};
+
+static_assert(sizeof(save_state_arm7_io_state_t) == 36);
 
 struct save_state_file_header_t
 {
@@ -99,3 +126,27 @@ struct save_state_file_header_t
 };
 
 static_assert(sizeof(save_state_file_header_t) == 56);
+
+struct save_state_file_header_v4_t
+{
+    u32 magic;
+    u32 version;
+    u32 arm9ContextOffset;
+    u32 arm9ContextSize;
+    u32 arm7ContextOffset;
+    u32 arm7ContextSize;
+    u32 ramOffset;
+    u32 ramSize;
+    u32 sharedWramOffset;
+    u32 sharedWramSize;
+    u32 arm7WramOffset;
+    u32 arm7WramSize;
+    u32 vramOffset;
+    u32 vramSize;
+    u32 paletteOffset;
+    u32 paletteSize;
+    u32 oamOffset;
+    u32 oamSize;
+};
+
+static_assert(sizeof(save_state_file_header_v4_t) == 72);
