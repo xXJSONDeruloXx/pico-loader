@@ -118,6 +118,28 @@ static void restoreArm9IoState()
     *(vu32*)0x04000108 = ioState->timer2;
     *(vu32*)0x0400010C = ioState->timer3;
     *(vu32*)0x04000210 = ioState->ie;
+
+    *(vu32*)0x04000010 = ioState->bgOfsMain0;
+    *(vu32*)0x04000014 = ioState->bgOfsMain1;
+    *(vu32*)0x04000018 = ioState->bgOfsMain2;
+    *(vu32*)0x0400001C = ioState->bgOfsMain3;
+    *(vu32*)0x04001010 = ioState->bgOfsSub0;
+    *(vu32*)0x04001014 = ioState->bgOfsSub1;
+    *(vu32*)0x04001018 = ioState->bgOfsSub2;
+    *(vu32*)0x0400101C = ioState->bgOfsSub3;
+
+    *(vu32*)0x04000040 = ioState->winMain01;
+    *(vu32*)0x04000044 = ioState->winMain23;
+    *(vu32*)0x04000048 = ioState->winMainInOut;
+    *(vu32*)0x04001040 = ioState->winSub01;
+    *(vu32*)0x04001044 = ioState->winSub23;
+    *(vu32*)0x04001048 = ioState->winSubInOut;
+
+    *(vu32*)0x04000050 = ioState->blendMain0;
+    *(vu16*)0x04000054 = (u16)ioState->blendMain1;
+    *(vu32*)0x04001050 = ioState->blendSub0;
+    *(vu16*)0x04001054 = (u16)ioState->blendSub1;
+
     *(vu32*)0x04000208 = ioState->ime;
 }
 

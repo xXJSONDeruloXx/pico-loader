@@ -96,6 +96,54 @@ patch_vblankhotkey_handler:
     ldr r2, [r1]
     str r2, [r0], #4          // REG_IME
 
+    ldr r1, =0x04000010
+    ldr r2, [r1, #0x0]
+    str r2, [r0], #4          // BG0HOFS/VOFS
+    ldr r2, [r1, #0x4]
+    str r2, [r0], #4          // BG1HOFS/VOFS
+    ldr r2, [r1, #0x8]
+    str r2, [r0], #4          // BG2HOFS/VOFS
+    ldr r2, [r1, #0xC]
+    str r2, [r0], #4          // BG3HOFS/VOFS
+
+    ldr r3, =0x04001010
+    ldr r2, [r3, #0x0]
+    str r2, [r0], #4          // BG0HOFS/VOFS SUB
+    ldr r2, [r3, #0x4]
+    str r2, [r0], #4          // BG1HOFS/VOFS SUB
+    ldr r2, [r3, #0x8]
+    str r2, [r0], #4          // BG2HOFS/VOFS SUB
+    ldr r2, [r3, #0xC]
+    str r2, [r0], #4          // BG3HOFS/VOFS SUB
+
+    ldr r1, =0x04000040
+    ldr r2, [r1, #0x0]
+    str r2, [r0], #4          // WIN0H/WIN1H
+    ldr r2, [r1, #0x4]
+    str r2, [r0], #4          // WIN0V/WIN1V
+    ldr r2, [r1, #0x8]
+    str r2, [r0], #4          // WININ/WINOUT
+
+    ldr r3, =0x04001040
+    ldr r2, [r3, #0x0]
+    str r2, [r0], #4          // WIN0H/WIN1H SUB
+    ldr r2, [r3, #0x4]
+    str r2, [r0], #4          // WIN0V/WIN1V SUB
+    ldr r2, [r3, #0x8]
+    str r2, [r0], #4          // WININ/WINOUT SUB
+
+    ldr r1, =0x04000050
+    ldr r2, [r1, #0x0]
+    str r2, [r0], #4          // BLDCNT/BLDALPHA
+    ldrh r2, [r1, #0x4]
+    str r2, [r0], #4          // BLDY
+
+    ldr r3, =0x04001050
+    ldr r2, [r3, #0x0]
+    str r2, [r0], #4          // BLDCNT/BLDALPHA SUB
+    ldrh r2, [r3, #0x4]
+    str r2, [r0], #4          // BLDY SUB
+
     ldr r0, sdk5MainMemoryCmdAddress
     mov r1, #0x54
     orr r1, r1, #0x5300

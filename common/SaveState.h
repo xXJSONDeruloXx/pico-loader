@@ -41,9 +41,30 @@ struct save_state_arm9_io_state_t
     u32 timer3;
     u32 ie;
     u32 ime;
+
+    u32 bgOfsMain0;
+    u32 bgOfsMain1;
+    u32 bgOfsMain2;
+    u32 bgOfsMain3;
+    u32 bgOfsSub0;
+    u32 bgOfsSub1;
+    u32 bgOfsSub2;
+    u32 bgOfsSub3;
+
+    u32 winMain01;
+    u32 winMain23;
+    u32 winMainInOut;
+    u32 winSub01;
+    u32 winSub23;
+    u32 winSubInOut;
+
+    u32 blendMain0;
+    u32 blendMain1;
+    u32 blendSub0;
+    u32 blendSub1;
 };
 
-static_assert(sizeof(save_state_arm9_io_state_t) == 64);
+static_assert(sizeof(save_state_arm9_io_state_t) == 136);
 
 struct save_state_file_header_t
 {
