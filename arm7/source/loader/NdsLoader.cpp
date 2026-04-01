@@ -1037,6 +1037,51 @@ static bool restoreArm9VramState(FIL& file, u32 fileOffset, u32 size)
     return true;
 }
 
+static bool restoreArm9ItcmState(FIL& file, u32 fileOffset, u32 size)
+{
+    if (size > SAVE_STATE_ARM9_ITCM_BUFFER_SIZE)
+    {
+        return false;
+    }
+
+    auto itcmInfo = (save_state_arm9_itcm_state_t*)SAVE_STATE_ARM9_ITCM_INFO_ADDRESS;
+    itcmInfo->magic = 0;
+    itcmInfo->size = 0;
+
+    if (size == 0)
+    {
+        return true;
+    }
+
+    UINT bytesRead = 0;
+    u32 firstChunkSize = size;
+    if (firstChunkSize > SAVE_STATE_ARM9_ITCM_BUFFER_CHUNK_SIZE)
+    {
+        firstChunkSize = SAVE_STATE_ARM9_ITCM_BUFFER_CHUNK_SIZE;
+    }
+
+    if (f_lseek(&file, fileOffset) != FR_OK ||
+        f_read(&file, (void*)SAVE_STATE_ARM9_ITCM_BUFFER0_ADDRESS, firstChunkSize, &bytesRead) != FR_OK ||
+        bytesRead != firstChunkSize)
+    {
+        return false;
+    }
+
+    u32 secondChunkSize = size - firstChunkSize;
+    if (secondChunkSize > 0)
+    {
+        if (f_read(&file, (void*)SAVE_STATE_ARM9_ITCM_BUFFER1_ADDRESS, secondChunkSize, &bytesRead) != FR_OK ||
+            bytesRead != secondChunkSize)
+        {
+            return false;
+        }
+    }
+
+    itcmInfo->size = size;
+    itcmInfo->magic = SAVE_STATE_ITCM_MAGIC;
+    return true;
+}
+
 void NdsLoader::StartRom(BootMode bootMode)
 {
     LOG_DEBUG("Booting...\n");
@@ -1200,6 +1245,8 @@ bool NdsLoader::TryRestoreSaveState()
     u32 paletteSize = 0;
     u32 oamOffset = 0;
     u32 oamSize = 0;
+    u32 arm9ItcmOffset = 0;
+    u32 arm9ItcmSize = 0;
 
     auto tryReadContext = [&](u32 offset, u32 size, void* dest) -> bool {
         if (size != sizeof(save_state_cpu_context_t)) return true;
@@ -1208,8 +1255,55 @@ bool NdsLoader::TryRestoreSaveState()
                bytesRead == sizeof(save_state_cpu_context_t);
     };
 
-    if (header.magic == SAVE_STATE_FILE_MAGIC_V6 &&
-        header.version == SAVE_STATE_FILE_VERSION_V6)
+    ((save_state_arm9_itcm_state_t*)SAVE_STATE_ARM9_ITCM_INFO_ADDRESS)->magic = 0;
+
+    if (header.magic == SAVE_STATE_FILE_MAGIC_V7 &&
+        header.version == SAVE_STATE_FILE_VERSION_V7)
+    {
+        save_state_file_header_v7_t headerV7 {};
+        if (f_lseek(&file, 0) != FR_OK ||
+            f_read(&file, &headerV7, sizeof(headerV7), &bytesRead) != FR_OK ||
+            bytesRead != sizeof(headerV7))
+        {
+            f_close(&file);
+            return false;
+        }
+
+        if (headerV7.ramSize != 0x400000 ||
+            headerV7.gameCode != _romHeader.gameCode ||
+            headerV7.headerCrc != _romHeader.headerCrc ||
+            headerV7.arm9ItcmSize > SAVE_STATE_ARM9_ITCM_BUFFER_SIZE)
+        {
+            f_close(&file);
+            return false;
+        }
+
+        ramOffset = headerV7.ramOffset;
+        ramSize = headerV7.ramSize;
+        sharedWramOffset = headerV7.sharedWramOffset;
+        sharedWramSize = headerV7.sharedWramSize;
+        arm7WramOffset = headerV7.arm7WramOffset;
+        arm7WramSize = headerV7.arm7WramSize;
+        vramOffset = headerV7.vramOffset;
+        vramSize = headerV7.vramSize;
+        paletteOffset = headerV7.paletteOffset;
+        paletteSize = headerV7.paletteSize;
+        oamOffset = headerV7.oamOffset;
+        oamSize = headerV7.oamSize;
+        arm9ItcmOffset = headerV7.arm9ItcmOffset;
+        arm9ItcmSize = headerV7.arm9ItcmSize;
+
+        if (!tryReadContext(headerV7.arm9ContextOffset, headerV7.arm9ContextSize,
+                            (void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS) ||
+            !tryReadContext(headerV7.arm7ContextOffset, headerV7.arm7ContextSize,
+                            (void*)SAVE_STATE_ARM7_CONTEXT_ADDRESS))
+        {
+            f_close(&file);
+            return false;
+        }
+    }
+    else if (header.magic == SAVE_STATE_FILE_MAGIC_V6 &&
+             header.version == SAVE_STATE_FILE_VERSION_V6)
     {
         save_state_file_header_v6_t headerV6 {};
         if (f_lseek(&file, 0) != FR_OK ||
@@ -1410,6 +1504,13 @@ bool NdsLoader::TryRestoreSaveState()
             f_close(&file);
             return false;
         }
+    }
+
+    if (arm9ItcmSize > 0 && !restoreArm9ItcmState(file, arm9ItcmOffset, arm9ItcmSize))
+    {
+        LOG_ERROR("Failed to restore ARM9 ITCM\n");
+        f_close(&file);
+        return false;
     }
 
     if (version < SAVE_STATE_FILE_VERSION_V5)

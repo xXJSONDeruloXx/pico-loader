@@ -221,6 +221,29 @@ patch_vblankhotkey_handler:
     ldr r2, [r1, #0x2C]
     str r2, [r0], #4          // DMA3 CNT
 
+    ldr r0, arm9ItcmBuffer0Address
+    ldr r1, arm9ItcmSourceAddress
+    ldr r2, arm9ItcmChunkSize
+copy_arm9_itcm_chunk0_loop:
+    ldmia r1!, {r3-r10}
+    stmia r0!, {r3-r10}
+    subs r2, r2, #0x20
+    bgt copy_arm9_itcm_chunk0_loop
+
+    ldr r0, arm9ItcmBuffer1Address
+    ldr r2, arm9ItcmChunkSize
+copy_arm9_itcm_chunk1_loop:
+    ldmia r1!, {r3-r10}
+    stmia r0!, {r3-r10}
+    subs r2, r2, #0x20
+    bgt copy_arm9_itcm_chunk1_loop
+
+    ldr r0, arm9ItcmInfoAddress
+    ldr r1, arm9ItcmMagic
+    str r1, [r0], #4
+    ldr r1, arm9ItcmSize
+    str r1, [r0]
+
     ldr r0, sdk5MainMemoryCmdAddress
     mov r1, #0x54
     orr r1, r1, #0x5300
@@ -262,6 +285,27 @@ ioStateAddress:
 
 ioStateMagic:
     .word 0x494F5431
+
+arm9ItcmBuffer0Address:
+    .word 0x02FF0000
+
+arm9ItcmBuffer1Address:
+    .word 0x02FF8000
+
+arm9ItcmSourceAddress:
+    .word 0x01000000
+
+arm9ItcmInfoAddress:
+    .word 0x02FFBFF0
+
+arm9ItcmMagic:
+    .word 0x4954434D
+
+arm9ItcmChunkSize:
+    .word 0x4000
+
+arm9ItcmSize:
+    .word 0x8000
 
 hotkeyMask:
     .word 0x30C

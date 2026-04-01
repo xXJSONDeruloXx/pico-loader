@@ -1,4 +1,4 @@
-.section ".itcm", "ax"
+.text
 .arm
 .syntax unified
 
@@ -11,11 +11,18 @@
 // +20  pc    (original handler addr - not used)
 // +24  r[0]  .. +72  r[12]
 
-#define CTX_BASE        0x023FF000
-#define CTX_MAGIC       0x43545831
-#define CTX_SPSR        8
-#define CTX_LR          16
-#define CTX_R0          24
+#define CTX_BASE          0x023FF000
+#define CTX_MAGIC         0x43545831
+#define ITCM_BUFFER0_BASE 0x02FF0000
+#define ITCM_BUFFER1_BASE 0x02FF8000
+#define ITCM_INFO_BASE    0x02FFBFF0
+#define ITCM_MAGIC        0x4954434D
+#define ITCM_BASE         0x01000000
+#define ITCM_CHUNK_SIZE   0x00004000
+#define ITCM_MAX_SIZE     0x00008000
+#define CTX_SPSR          8
+#define CTX_LR            16
+#define CTX_R0            24
 
 // r0: arm9EntryPoint (fallback when no valid context)
 .global resumeOrBootArm9
@@ -28,6 +35,54 @@ resumeOrBootArm9:
     cmp r2, r3
     bne do_normal_boot              // no valid context, do normal boot
 
+    // --- Valid context found: restore staged ARM9 ITCM if present ---
+    ldr r4, itcm_info_addr
+    ldr r5, [r4]                    // load ITCM state magic
+    ldr r6, itcm_magic_val
+    cmp r5, r6
+    bne skip_itcm_restore
+
+    ldr r5, [r4, #4]                // staged ITCM size
+    cmp r5, #0
+    beq clear_itcm_info
+    ldr r6, itcm_max_size_val
+    cmp r5, r6
+    bhi clear_itcm_info
+
+    ldr r6, itcm_buffer0_addr
+    ldr r7, itcm_base_addr
+    ldr r8, itcm_chunk_size_val
+    mov r9, r8
+    cmp r5, r8
+    movls r9, r5
+restore_itcm_chunk0_loop:
+    cmp r9, #0
+    beq restore_itcm_chunk0_done
+    ldr r0, [r6], #4
+    str r0, [r7], #4
+    subs r9, r9, #4
+    b restore_itcm_chunk0_loop
+restore_itcm_chunk0_done:
+
+    subs r5, r5, r8
+    ble restore_itcm_done
+
+    ldr r6, itcm_buffer1_addr
+restore_itcm_chunk1_loop:
+    ldr r0, [r6], #4
+    str r0, [r7], #4
+    subs r5, r5, #4
+    bne restore_itcm_chunk1_loop
+
+restore_itcm_done:
+    mov r0, #0
+    mcr p15, 0, r0, c7, c5, 0       // invalidate entire icache after ITCM rewrite
+
+clear_itcm_info:
+    mov r0, #0
+    str r0, [r4]
+
+skip_itcm_restore:
     // --- Valid context found: consume it (clear magic) ---
     mov r2, #0
     str r2, [r1]                    // clear magic so it won't be used again
@@ -91,4 +146,18 @@ ctx_base_addr:
     .word CTX_BASE
 ctx_magic_val:
     .word CTX_MAGIC
+itcm_buffer0_addr:
+    .word ITCM_BUFFER0_BASE
+itcm_buffer1_addr:
+    .word ITCM_BUFFER1_BASE
+itcm_info_addr:
+    .word ITCM_INFO_BASE
+itcm_magic_val:
+    .word ITCM_MAGIC
+itcm_base_addr:
+    .word ITCM_BASE
+itcm_chunk_size_val:
+    .word ITCM_CHUNK_SIZE
+itcm_max_size_val:
+    .word ITCM_MAX_SIZE
 .pool

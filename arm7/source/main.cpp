@@ -159,6 +159,7 @@ static void handlePendingSaveStateDump()
         *(volatile u32*)SAVE_STATE_ARM7_CONTEXT_ADDRESS = 0;
         ((volatile save_state_arm9_io_state_t*)SAVE_STATE_ARM9_IO_STATE_ADDRESS)->magic = 0;
         ((volatile save_state_arm7_io_state_t*)SAVE_STATE_ARM7_IO_STATE_ADDRESS)->magic = 0;
+        ((volatile save_state_arm9_itcm_state_t*)SAVE_STATE_ARM9_ITCM_INFO_ADDRESS)->magic = 0;
     };
 
     if (gLoaderHeader.loadParams.savePath[0] == 0)
@@ -206,20 +207,22 @@ static void handlePendingSaveStateDump()
     constexpr u32 kArm7WramBase     = 0x03800000;
     constexpr u32 kArm7WramSize     = 0x10000;
     constexpr u32 kVramSize         = 0xA4000;
-    constexpr u32 kHeaderSize       = sizeof(save_state_file_header_v6_t);
+    constexpr u32 kArm9ItcmSize     = SAVE_STATE_ARM9_ITCM_BUFFER_SIZE;
+    constexpr u32 kHeaderSize       = sizeof(save_state_file_header_v7_t);
     constexpr u32 kContextBlockSize = kHeaderSize + sizeof(save_state_cpu_context_t) * 2;
     constexpr u32 kSharedWramOff    = kContextBlockSize + kRamSize;
     constexpr u32 kArm7WramOff      = kSharedWramOff + kSharedWramSize;
     constexpr u32 kVramOff          = kArm7WramOff + kArm7WramSize;
     constexpr u32 kPaletteOff       = kVramOff + kVramSize;
     constexpr u32 kOamOff           = kPaletteOff + kPaletteSize;
+    constexpr u32 kArm9ItcmOff      = kOamOff + kOamSize;
 
     auto romHeader = (const nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader;
 
-    save_state_file_header_v6_t header
+    save_state_file_header_v7_t header
     {
-        .magic              = SAVE_STATE_FILE_MAGIC_V6,
-        .version            = SAVE_STATE_FILE_VERSION_V6,
+        .magic              = SAVE_STATE_FILE_MAGIC_V7,
+        .version            = SAVE_STATE_FILE_VERSION_V7,
         .arm9ContextOffset  = kHeaderSize,
         .arm9ContextSize    = sizeof(save_state_cpu_context_t),
         .arm7ContextOffset  = kHeaderSize + sizeof(save_state_cpu_context_t),
@@ -238,6 +241,8 @@ static void handlePendingSaveStateDump()
         .oamSize            = kOamSize,
         .gameCode           = romHeader->gameCode,
         .headerCrc          = romHeader->headerCrc,
+        .arm9ItcmOffset     = kArm9ItcmOff,
+        .arm9ItcmSize       = kArm9ItcmSize,
     };
 
     UINT bytesWritten = 0;
@@ -326,6 +331,18 @@ static void handlePendingSaveStateDump()
         return;
     }
 
+    if (f_write(&file, (const void*)SAVE_STATE_ARM9_ITCM_BUFFER0_ADDRESS,
+                SAVE_STATE_ARM9_ITCM_BUFFER_CHUNK_SIZE, &bytesWritten) != FR_OK ||
+        bytesWritten != SAVE_STATE_ARM9_ITCM_BUFFER_CHUNK_SIZE ||
+        f_write(&file, (const void*)SAVE_STATE_ARM9_ITCM_BUFFER1_ADDRESS,
+                SAVE_STATE_ARM9_ITCM_BUFFER_CHUNK_SIZE, &bytesWritten) != FR_OK ||
+        bytesWritten != SAVE_STATE_ARM9_ITCM_BUFFER_CHUNK_SIZE)
+    {
+        LOG_ERROR("Failed to write ARM9 ITCM savestate section\n");
+        abortPendingSaveStateDump();
+        return;
+    }
+
     if (f_close(&file) != FR_OK)
     {
         LOG_ERROR("Failed to close temp savestate dump file\n");
@@ -344,7 +361,7 @@ static void handlePendingSaveStateDump()
     }
 
     clearPendingSaveStateMarkers();
-    LOG_DEBUG("Savestate v6 dump written to %s\n", gLoaderHeader.loadParams.savePath);
+    LOG_DEBUG("Savestate v7 dump written to %s\n", gLoaderHeader.loadParams.savePath);
 }
 
 static void clearSoundRegisters()

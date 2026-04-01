@@ -8,6 +8,8 @@
 #define SAVE_STATE_FILE_MAGIC_V4   0x33535350u // PSS3
 #define SAVE_STATE_FILE_MAGIC_V5   0x34535350u // PSS4
 #define SAVE_STATE_FILE_MAGIC_V6   0x35535350u // PSS5
+#define SAVE_STATE_FILE_MAGIC_V7   0x36535350u // PSS6
+#define SAVE_STATE_FILE_VERSION_V7 7u
 #define SAVE_STATE_FILE_VERSION_V6 6u
 #define SAVE_STATE_FILE_VERSION_V5 5u
 #define SAVE_STATE_FILE_VERSION_V4 4u
@@ -141,6 +143,14 @@ struct save_state_arm7_io_state_t
 
 static_assert(sizeof(save_state_arm7_io_state_t) == 360);
 
+struct save_state_arm9_itcm_state_t
+{
+    u32 magic;
+    u32 size;
+};
+
+static_assert(sizeof(save_state_arm9_itcm_state_t) == 8);
+
 struct save_state_file_header_t
 {
     u32 magic;
@@ -211,3 +221,31 @@ struct save_state_file_header_v6_t
 };
 
 static_assert(sizeof(save_state_file_header_v6_t) == 80);
+
+struct save_state_file_header_v7_t
+{
+    u32 magic;
+    u32 version;
+    u32 arm9ContextOffset;
+    u32 arm9ContextSize;
+    u32 arm7ContextOffset;
+    u32 arm7ContextSize;
+    u32 ramOffset;
+    u32 ramSize;
+    u32 sharedWramOffset;
+    u32 sharedWramSize;
+    u32 arm7WramOffset;
+    u32 arm7WramSize;
+    u32 vramOffset;
+    u32 vramSize;
+    u32 paletteOffset;
+    u32 paletteSize;
+    u32 oamOffset;
+    u32 oamSize;
+    u32 gameCode;
+    u32 headerCrc;
+    u32 arm9ItcmOffset;
+    u32 arm9ItcmSize;
+};
+
+static_assert(sizeof(save_state_file_header_v7_t) == 88);
