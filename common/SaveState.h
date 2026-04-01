@@ -51,6 +51,15 @@ struct save_state_arm9_io_state_t
     u32 bgOfsSub2;
     u32 bgOfsSub3;
 
+    u32 bgAffineMain20;
+    u32 bgAffineMain24;
+    u32 bgAffineMain30;
+    u32 bgAffineMain34;
+    u32 bgAffineSub20;
+    u32 bgAffineSub24;
+    u32 bgAffineSub30;
+    u32 bgAffineSub34;
+
     u32 winMain01;
     u32 winMain23;
     u32 winMainInOut;
@@ -64,7 +73,7 @@ struct save_state_arm9_io_state_t
     u32 blendSub1;
 };
 
-static_assert(sizeof(save_state_arm9_io_state_t) == 136);
+static_assert(sizeof(save_state_arm9_io_state_t) == 168);
 
 struct save_state_file_header_t
 {

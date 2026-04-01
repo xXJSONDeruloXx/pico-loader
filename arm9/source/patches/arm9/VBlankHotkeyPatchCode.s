@@ -116,6 +116,26 @@ patch_vblankhotkey_handler:
     ldr r2, [r3, #0xC]
     str r2, [r0], #4          // BG3HOFS/VOFS SUB
 
+    ldr r1, =0x04000020
+    ldr r2, [r1, #0x0]
+    str r2, [r0], #4          // BG2PA/PB
+    ldr r2, [r1, #0x4]
+    str r2, [r0], #4          // BG2PC/PD
+    ldr r2, [r1, #0x10]
+    str r2, [r0], #4          // BG3PA/PB
+    ldr r2, [r1, #0x14]
+    str r2, [r0], #4          // BG3PC/PD
+
+    ldr r3, =0x04001020
+    ldr r2, [r3, #0x0]
+    str r2, [r0], #4          // BG2PA/PB SUB
+    ldr r2, [r3, #0x4]
+    str r2, [r0], #4          // BG2PC/PD SUB
+    ldr r2, [r3, #0x10]
+    str r2, [r0], #4          // BG3PA/PB SUB
+    ldr r2, [r3, #0x14]
+    str r2, [r0], #4          // BG3PC/PD SUB
+
     ldr r1, =0x04000040
     ldr r2, [r1, #0x0]
     str r2, [r0], #4          // WIN0H/WIN1H

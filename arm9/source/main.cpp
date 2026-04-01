@@ -128,6 +128,15 @@ static void restoreArm9IoState()
     *(vu32*)0x04001018 = ioState->bgOfsSub2;
     *(vu32*)0x0400101C = ioState->bgOfsSub3;
 
+    *(vu32*)0x04000020 = ioState->bgAffineMain20;
+    *(vu32*)0x04000024 = ioState->bgAffineMain24;
+    *(vu32*)0x04000030 = ioState->bgAffineMain30;
+    *(vu32*)0x04000034 = ioState->bgAffineMain34;
+    *(vu32*)0x04001020 = ioState->bgAffineSub20;
+    *(vu32*)0x04001024 = ioState->bgAffineSub24;
+    *(vu32*)0x04001030 = ioState->bgAffineSub30;
+    *(vu32*)0x04001034 = ioState->bgAffineSub34;
+
     *(vu32*)0x04000040 = ioState->winMain01;
     *(vu32*)0x04000044 = ioState->winMain23;
     *(vu32*)0x04000048 = ioState->winMainInOut;
