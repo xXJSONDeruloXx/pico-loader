@@ -1249,10 +1249,15 @@ bool NdsLoader::TryRestoreSaveState()
     u32 arm9ItcmSize = 0;
 
     auto tryReadContext = [&](u32 offset, u32 size, void* dest) -> bool {
-        if (size != sizeof(save_state_cpu_context_t)) return true;
+        if (size != sizeof(save_state_cpu_context_t) && size != SAVE_STATE_CPU_CONTEXT_V1_SIZE)
+        {
+            return true;
+        }
+
+        memset(dest, 0, sizeof(save_state_cpu_context_t));
         return f_lseek(&file, offset) == FR_OK &&
-               f_read(&file, dest, sizeof(save_state_cpu_context_t), &bytesRead) == FR_OK &&
-               bytesRead == sizeof(save_state_cpu_context_t);
+               f_read(&file, dest, size, &bytesRead) == FR_OK &&
+               bytesRead == size;
     };
 
     ((save_state_arm9_itcm_state_t*)SAVE_STATE_ARM9_ITCM_INFO_ADDRESS)->magic = 0;

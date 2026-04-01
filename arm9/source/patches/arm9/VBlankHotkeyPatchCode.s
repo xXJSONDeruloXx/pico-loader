@@ -52,6 +52,9 @@ patch_vblankhotkey_handler:
     str r10, [r0], #4
     str r11, [r0], #4
     str r12, [r0], #4
+    mov r2, r0
+    stmia r2, {sp, lr}^
+    add r0, r0, #8
 
     // Save a small set of ARM9-visible IO state for better resume fidelity.
     ldr r0, ioStateAddress

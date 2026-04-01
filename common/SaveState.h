@@ -18,6 +18,8 @@
 #define SAVE_STATE_CONTEXT_MAGIC   0x43545831u
 #define SAVE_STATE_IO_MAGIC        0x494F5431u
 
+#define SAVE_STATE_CPU_CONTEXT_V1_SIZE 76u
+
 struct save_state_cpu_context_t
 {
     u32 magic;
@@ -27,9 +29,11 @@ struct save_state_cpu_context_t
     u32 lr;
     u32 pc;
     u32 r[13];
+    u32 userSp;
+    u32 userLr;
 };
 
-static_assert(sizeof(save_state_cpu_context_t) == 76);
+static_assert(sizeof(save_state_cpu_context_t) == 84);
 
 #define SAVE_STATE_ARM9_IO_STATE_V4_SIZE 220u
 #define SAVE_STATE_ARM7_IO_STATE_V4_SIZE 36u

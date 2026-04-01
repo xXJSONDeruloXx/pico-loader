@@ -54,6 +54,10 @@ hotkeystatecapture_entry:
     mov r1, r12
     stmia r0!, {r1}
 
+    movs r1, #0
+    stmia r0!, {r1} // user sp placeholder
+    stmia r0!, {r1} // user lr placeholder
+
     // Capture a small set of ARM7 IO state.
     ldr r0, ioStateAddress
     ldr r1, ioStateMagic

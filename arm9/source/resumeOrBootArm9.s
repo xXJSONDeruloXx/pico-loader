@@ -6,10 +6,12 @@
 // +0   magic
 // +4   cpsr  (IRQ mode cpsr at capture)
 // +8   spsr  (game's cpsr - what we restore to)
-// +12  sp    (IRQ sp at capture - not used for resume)
-// +16  lr    (game return PC - the address to resume at)
-// +20  pc    (original handler addr - not used)
-// +24  r[0]  .. +72  r[12]
+// +12  sp      (IRQ sp at capture)
+// +16  lr      (game return PC - the address to resume at)
+// +20  pc      (original handler addr - not used)
+// +24  r[0]    .. +72  r[12]
+// +76  userSp  (banked user/system sp)
+// +80  userLr  (banked user/system lr)
 
 #define CTX_BASE          0x023FF000
 #define CTX_MAGIC         0x43545831
@@ -21,8 +23,10 @@
 #define ITCM_CHUNK_SIZE   0x00004000
 #define ITCM_MAX_SIZE     0x00008000
 #define CTX_SPSR          8
+#define CTX_IRQ_SP        12
 #define CTX_LR            16
 #define CTX_R0            24
+#define CTX_USER_SP       76
 
 // r0: arm9EntryPoint (fallback when no valid context)
 .global resumeOrBootArm9
@@ -96,6 +100,15 @@ skip_itcm_restore:
     // --- Restore SPSR = game's cpsr ---
     ldr r2, [r1, #CTX_SPSR]
     msr spsr_cxsf, r2
+
+    // --- Restore IRQ and user/system banked SP/LR ---
+    ldr sp, [r1, #CTX_IRQ_SP]
+    ldr r2, [r1, #CTX_USER_SP]
+    cmp r2, #0
+    beq skip_user_bank_restore
+    add r4, r1, #CTX_USER_SP
+    ldmia r4, {sp, lr}^
+skip_user_bank_restore:
 
     // --- Restore LR_irq = game return PC ---
     ldr lr, [r1, #CTX_LR]
