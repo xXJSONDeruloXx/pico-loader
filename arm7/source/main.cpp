@@ -206,7 +206,7 @@ static void handlePendingSaveStateDump()
     constexpr u32 kArm7WramBase     = 0x03800000;
     constexpr u32 kArm7WramSize     = 0x10000;
     constexpr u32 kVramSize         = 0xA4000;
-    constexpr u32 kHeaderSize       = sizeof(save_state_file_header_v4_t);
+    constexpr u32 kHeaderSize       = sizeof(save_state_file_header_v6_t);
     constexpr u32 kContextBlockSize = kHeaderSize + sizeof(save_state_cpu_context_t) * 2;
     constexpr u32 kSharedWramOff    = kContextBlockSize + kRamSize;
     constexpr u32 kArm7WramOff      = kSharedWramOff + kSharedWramSize;
@@ -214,10 +214,12 @@ static void handlePendingSaveStateDump()
     constexpr u32 kPaletteOff       = kVramOff + kVramSize;
     constexpr u32 kOamOff           = kPaletteOff + kPaletteSize;
 
-    save_state_file_header_v4_t header
+    auto romHeader = (const nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader;
+
+    save_state_file_header_v6_t header
     {
-        .magic              = SAVE_STATE_FILE_MAGIC_V5,
-        .version            = SAVE_STATE_FILE_VERSION_V5,
+        .magic              = SAVE_STATE_FILE_MAGIC_V6,
+        .version            = SAVE_STATE_FILE_VERSION_V6,
         .arm9ContextOffset  = kHeaderSize,
         .arm9ContextSize    = sizeof(save_state_cpu_context_t),
         .arm7ContextOffset  = kHeaderSize + sizeof(save_state_cpu_context_t),
@@ -234,6 +236,8 @@ static void handlePendingSaveStateDump()
         .paletteSize        = kPaletteSize,
         .oamOffset          = kOamOff,
         .oamSize            = kOamSize,
+        .gameCode           = romHeader->gameCode,
+        .headerCrc          = romHeader->headerCrc,
     };
 
     UINT bytesWritten = 0;
@@ -340,7 +344,7 @@ static void handlePendingSaveStateDump()
     }
 
     clearPendingSaveStateMarkers();
-    LOG_DEBUG("Savestate v5 dump written to %s\n", gLoaderHeader.loadParams.savePath);
+    LOG_DEBUG("Savestate v6 dump written to %s\n", gLoaderHeader.loadParams.savePath);
 }
 
 static void clearSoundRegisters()

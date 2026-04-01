@@ -1208,10 +1208,52 @@ bool NdsLoader::TryRestoreSaveState()
                bytesRead == sizeof(save_state_cpu_context_t);
     };
 
-    if ((header.magic == SAVE_STATE_FILE_MAGIC_V5 &&
-         header.version == SAVE_STATE_FILE_VERSION_V5) ||
-        (header.magic == SAVE_STATE_FILE_MAGIC_V4 &&
-         header.version == SAVE_STATE_FILE_VERSION_V4))
+    if (header.magic == SAVE_STATE_FILE_MAGIC_V6 &&
+        header.version == SAVE_STATE_FILE_VERSION_V6)
+    {
+        save_state_file_header_v6_t headerV6 {};
+        if (f_lseek(&file, 0) != FR_OK ||
+            f_read(&file, &headerV6, sizeof(headerV6), &bytesRead) != FR_OK ||
+            bytesRead != sizeof(headerV6))
+        {
+            f_close(&file);
+            return false;
+        }
+
+        if (headerV6.ramSize != 0x400000 ||
+            headerV6.gameCode != _romHeader.gameCode ||
+            headerV6.headerCrc != _romHeader.headerCrc)
+        {
+            f_close(&file);
+            return false;
+        }
+
+        ramOffset = headerV6.ramOffset;
+        ramSize = headerV6.ramSize;
+        sharedWramOffset = headerV6.sharedWramOffset;
+        sharedWramSize = headerV6.sharedWramSize;
+        arm7WramOffset = headerV6.arm7WramOffset;
+        arm7WramSize = headerV6.arm7WramSize;
+        vramOffset = headerV6.vramOffset;
+        vramSize = headerV6.vramSize;
+        paletteOffset = headerV6.paletteOffset;
+        paletteSize = headerV6.paletteSize;
+        oamOffset = headerV6.oamOffset;
+        oamSize = headerV6.oamSize;
+
+        if (!tryReadContext(headerV6.arm9ContextOffset, headerV6.arm9ContextSize,
+                            (void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS) ||
+            !tryReadContext(headerV6.arm7ContextOffset, headerV6.arm7ContextSize,
+                            (void*)SAVE_STATE_ARM7_CONTEXT_ADDRESS))
+        {
+            f_close(&file);
+            return false;
+        }
+    }
+    else if ((header.magic == SAVE_STATE_FILE_MAGIC_V5 &&
+              header.version == SAVE_STATE_FILE_VERSION_V5) ||
+             (header.magic == SAVE_STATE_FILE_MAGIC_V4 &&
+              header.version == SAVE_STATE_FILE_VERSION_V4))
     {
         save_state_file_header_v4_t headerV4 {};
         if (f_lseek(&file, 0) != FR_OK ||
