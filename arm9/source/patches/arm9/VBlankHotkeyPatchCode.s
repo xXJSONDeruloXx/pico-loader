@@ -336,7 +336,7 @@ arm9ItcmSize:
     .word 0x8000
 
 hotkeyMask:
-    .word 0x30C
+    .word 0x8C
 
 hotkeyPressedState:
     .word hotkeyPressedStateValue

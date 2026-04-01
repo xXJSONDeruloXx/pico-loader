@@ -499,7 +499,7 @@ keyinputAddress:
     .word 0x04000130
 
 hotkeyMask:
-    .word 0x30C
+    .word 0x8C
 
 .global cheatengine_cheatsPtr
 cheatengine_cheatsPtr:
