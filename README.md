@@ -14,7 +14,7 @@ Pico Loader is a homebrew and retail DS(i) rom loader supporting a variety of pl
 
 Note that Pico Loader can currently not run retail roms from the DSi SD card. Homebrew is supported, however.
 
-Retail games support an in-game hotkey to return to the launcher when `launcherPath` is set by the application that booted Pico Loader. The default hotkey is `L + R + START + SELECT`. When triggered, Pico Loader also writes a raw 4 MB RAM dump to `<rom>.state.bin` before returning to the launcher. Launchers can then resume that dump by passing `__pico_state=<path>` in the arguments buffer when starting the same ROM again.
+Retail games support an in-game hotkey to return to the launcher when `launcherPath` is set by the application that booted Pico Loader. The default hotkey is `L + R + START + SELECT`. When triggered, Pico Loader writes a `.state.bin` snapshot that currently contains ARM9/ARM7 CPU context blocks, main RAM, palette RAM, OAM, and a small set of ARM9 IO registers before returning to the launcher. Launchers can then resume that dump by passing `__pico_state=<path>` in the arguments buffer when starting the same ROM again.
 
 ## Supported platforms
 

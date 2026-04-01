@@ -53,8 +53,48 @@ patch_vblankhotkey_handler:
     str r11, [r0], #4
     str r12, [r0], #4
 
-    // arm9 context save is already written above,
-    // palette/OAM are captured by the ARM7 dump routine via the V3 header sections
+    // Save a small set of ARM9-visible IO state for better resume fidelity.
+    ldr r0, ioStateAddress
+    ldr r1, ioStateMagic
+    str r1, [r0], #4
+
+    ldr r1, =0x04000000
+    ldr r2, [r1]
+    str r2, [r0], #4          // REG_DISPCNT
+    ldr r3, =0x04001000
+    ldr r2, [r3]
+    str r2, [r0], #4          // REG_DISPCNT_SUB
+    ldr r2, [r1, #0x8]
+    str r2, [r0], #4          // BG0/1 CNT main
+    ldr r2, [r1, #0xC]
+    str r2, [r0], #4          // BG2/3 CNT main
+    ldr r2, [r3, #0x8]
+    str r2, [r0], #4          // BG0/1 CNT sub
+    ldr r2, [r3, #0xC]
+    str r2, [r0], #4          // BG2/3 CNT sub
+    ldrh r2, [r1, #0x4]
+    str r2, [r0], #4          // REG_DISPSTAT (lower 16 bits)
+    ldrh r2, [r1, #0x6C]
+    str r2, [r0], #4          // REG_MASTER_BRIGHT
+    ldrh r2, [r3, #0x6C]
+    str r2, [r0], #4          // REG_MASTER_BRIGHT_SUB
+
+    ldr r1, =0x04000100
+    ldr r2, [r1, #0x0]
+    str r2, [r0], #4          // TM0
+    ldr r2, [r1, #0x4]
+    str r2, [r0], #4          // TM1
+    ldr r2, [r1, #0x8]
+    str r2, [r0], #4          // TM2
+    ldr r2, [r1, #0xC]
+    str r2, [r0], #4          // TM3
+
+    ldr r1, =0x04000210
+    ldr r2, [r1]
+    str r2, [r0], #4          // REG_IE
+    ldr r1, =0x04000208
+    ldr r2, [r1]
+    str r2, [r0], #4          // REG_IME
 
     ldr r0, sdk5MainMemoryCmdAddress
     mov r1, #0x54
@@ -91,6 +131,12 @@ contextAddress:
 
 contextMagic:
     .word 0x43545831
+
+ioStateAddress:
+    .word 0x023FF100
+
+ioStateMagic:
+    .word 0x494F5431
 
 hotkeyMask:
     .word 0x30C

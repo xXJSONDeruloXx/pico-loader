@@ -28,6 +28,7 @@
 #include "errorDisplay/ErrorDisplay.h"
 #include "LoaderInfo.h"
 #include "jumpToArm9EntryPoint.h"
+#include "SaveState.h"
 #include "patches/homebrew/BootstubPatchCode.h"
 #include "HomebrewBootstub.h"
 #include "../../include/picoLoader7.h"
@@ -94,6 +95,33 @@ static void clearGraphicsMemory()
 extern "C" void resumeOrBootArm9(void* arm9EntryPoint);
 
 [[gnu::noinline, gnu::section(".itcm")]]
+static void restoreArm9IoState()
+{
+    auto ioState = (volatile save_state_arm9_io_state_t*)SAVE_STATE_ARM9_IO_STATE_ADDRESS;
+    if (ioState->magic != SAVE_STATE_IO_MAGIC)
+    {
+        return;
+    }
+
+    ioState->magic = 0;
+    *(vu32*)0x04000000 = ioState->dispcnt;
+    *(vu32*)0x04001000 = ioState->dispcntSub;
+    *(vu32*)0x04000008 = ioState->bgCnt01;
+    *(vu32*)0x0400000C = ioState->bgCnt23;
+    *(vu32*)0x04001008 = ioState->bgCntSub01;
+    *(vu32*)0x0400100C = ioState->bgCntSub23;
+    *(vu16*)0x04000004 = (u16)ioState->dispstat;
+    *(vu16*)0x0400006C = (u16)ioState->masterBright;
+    *(vu16*)0x0400106C = (u16)ioState->masterBrightSub;
+    *(vu32*)0x04000100 = ioState->timer0;
+    *(vu32*)0x04000104 = ioState->timer1;
+    *(vu32*)0x04000108 = ioState->timer2;
+    *(vu32*)0x0400010C = ioState->timer3;
+    *(vu32*)0x04000210 = ioState->ie;
+    *(vu32*)0x04000208 = ioState->ime;
+}
+
+[[gnu::noinline, gnu::section(".itcm")]]
 static void bootArm9()
 {
     mem_setVramAMapping(MEM_VRAM_AB_LCDC);
@@ -115,6 +143,7 @@ static void bootArm9()
     while (gfx_getVCount() != 191);
     while (gfx_getVCount() == 191);
     REG_IF = ~0u; // final clear of REG_IF bits
+    restoreArm9IoState();
     auto romHeader = (const nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader;
     resumeOrBootArm9((void*)romHeader->arm9EntryAddress);
 }
