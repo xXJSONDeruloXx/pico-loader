@@ -91,6 +91,8 @@ static void clearGraphicsMemory()
     gx_swapBuffers(GX_XLU_SORT_AUTO, GX_DEPTH_MODE_Z);
 }
 
+extern "C" void resumeOrBootArm9(void* arm9EntryPoint);
+
 [[gnu::noinline, gnu::section(".itcm")]]
 static void bootArm9()
 {
@@ -114,7 +116,7 @@ static void bootArm9()
     while (gfx_getVCount() == 191);
     REG_IF = ~0u; // final clear of REG_IF bits
     auto romHeader = (const nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader;
-    jumpToArm9EntryPoint((void*)romHeader->arm9EntryAddress);
+    resumeOrBootArm9((void*)romHeader->arm9EntryAddress);
 }
 
 static void handleInitializeSdCardCommand()
@@ -238,9 +240,11 @@ static void handleSwitchToDSModeCommand()
 static void handleBootCommand()
 {
     bool isSdkResetSystem = receiveFromArm7() != 0;
+    bool isResumeState = receiveFromArm7() != 0;
     REG_EXMEMCNT &= ~0x0880; // map ds and gba slot to arm9
     sLoaderPlatform->PrepareRomBoot(sRomDirSector, sRomDirSectorOffset);
-    Arm9IoRegisterClearer().ClearNtrIoRegisters(isSdkResetSystem);
+    // On resume, use soft-reset style IO clearing to preserve display state
+    Arm9IoRegisterClearer().ClearNtrIoRegisters(isSdkResetSystem || isResumeState);
     REG_EXMEMCNT |= 0x0880; // map ds and gba slot to arm7
     auto ntrRomHeader = (const nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader;
     if (gIsDsiMode && ntrRomHeader->SupportsDsiMode())

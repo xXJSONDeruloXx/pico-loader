@@ -153,16 +153,32 @@ static void handlePendingSaveStateDump()
         return;
     }
 
+    constexpr u32 kPaletteBase   = 0x05000000;
+    constexpr u32 kPaletteSize   = 0x800;
+    constexpr u32 kOamBase       = 0x07000000;
+    constexpr u32 kOamSize       = 0x800;
+
+    constexpr u32 kCtxBlockSize  = sizeof(save_state_file_header_t) + sizeof(save_state_cpu_context_t) * 2;
+    constexpr u32 kRamSize       = 0x400000u;
+    constexpr u32 kPaletteOff    = kCtxBlockSize + kRamSize;
+    constexpr u32 kOamOff        = kPaletteOff + kPaletteSize;
+
     save_state_file_header_t header
     {
-        .magic = SAVE_STATE_FILE_MAGIC_V2,
-        .version = SAVE_STATE_FILE_VERSION_V2,
-        .arm9ContextOffset = sizeof(save_state_file_header_t),
-        .arm9ContextSize = sizeof(save_state_cpu_context_t),
-        .arm7ContextOffset = sizeof(save_state_file_header_t) + sizeof(save_state_cpu_context_t),
-        .arm7ContextSize = sizeof(save_state_cpu_context_t),
-        .ramOffset = sizeof(save_state_file_header_t) + sizeof(save_state_cpu_context_t) * 2,
-        .ramSize = 0x400000
+        .magic              = SAVE_STATE_FILE_MAGIC_V3,
+        .version            = SAVE_STATE_FILE_VERSION_V3,
+        .arm9ContextOffset  = sizeof(save_state_file_header_t),
+        .arm9ContextSize    = sizeof(save_state_cpu_context_t),
+        .arm7ContextOffset  = sizeof(save_state_file_header_t) + sizeof(save_state_cpu_context_t),
+        .arm7ContextSize    = sizeof(save_state_cpu_context_t),
+        .ramOffset          = kCtxBlockSize,
+        .ramSize            = kRamSize,
+        .vramOffset         = 0,
+        .vramSize           = 0,
+        .oamOffset          = kOamOff,
+        .oamSize            = kOamSize,
+        .paletteOffset      = kPaletteOff,
+        .paletteSize        = kPaletteSize,
     };
 
     UINT bytesWritten = 0;
@@ -202,13 +218,29 @@ static void handlePendingSaveStateDump()
         }
     }
 
+    // Write palette RAM
+    if (f_write(&file, (const void*)kPaletteBase, kPaletteSize, &bytesWritten) != FR_OK || bytesWritten != kPaletteSize)
+    {
+        LOG_ERROR("Failed to write palette savestate section\n");
+        f_close(&file);
+        return;
+    }
+
+    // Write OAM
+    if (f_write(&file, (const void*)kOamBase, kOamSize, &bytesWritten) != FR_OK || bytesWritten != kOamSize)
+    {
+        LOG_ERROR("Failed to write OAM savestate section\n");
+        f_close(&file);
+        return;
+    }
+
     if (f_close(&file) != FR_OK)
     {
         LOG_ERROR("Failed to close savestate dump file\n");
         return;
     }
 
-    LOG_DEBUG("Savestate RAM dump written to %s\n", gLoaderHeader.loadParams.savePath);
+    LOG_DEBUG("Savestate v3 dump written to %s\n", gLoaderHeader.loadParams.savePath);
 }
 
 static void clearSoundRegisters()

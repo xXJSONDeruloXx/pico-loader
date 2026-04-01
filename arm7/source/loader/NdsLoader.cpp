@@ -968,6 +968,7 @@ void NdsLoader::StartRom(BootMode bootMode)
     while (gfx_getVCount() == 191);
     sendToArm9(IPC_COMMAND_ARM9_BOOT);
     sendToArm9(bootMode == BootMode::SdkResetSystem ? 1 : 0);
+    sendToArm9(_saveStatePath && _saveStatePath[0] ? 1 : 0); // isResumeState
 
     REG_IF = ~0u;
     if (Environment::IsDsiMode())
@@ -1111,8 +1112,32 @@ bool NdsLoader::TryRestoreSaveState()
 
     u32 ramOffset = 0;
     u32 ramSize = 0;
-    bool hasExplicitContexts = false;
-    if (header.magic == SAVE_STATE_FILE_MAGIC_V2 &&
+    bool hasExplicitContexts [[maybe_unused]] = false;
+
+    auto tryReadContext = [&](u32 offset, u32 size, void* dest) -> bool {
+        if (size != sizeof(save_state_cpu_context_t)) return true; // skip if wrong size
+        return f_lseek(&file, offset) == FR_OK &&
+               f_read(&file, dest, sizeof(save_state_cpu_context_t), &bytesRead) == FR_OK &&
+               bytesRead == sizeof(save_state_cpu_context_t);
+    };
+
+    if (header.magic == SAVE_STATE_FILE_MAGIC_V3 &&
+        header.version == SAVE_STATE_FILE_VERSION_V3 &&
+        header.ramSize == 0x400000)
+    {
+        hasExplicitContexts = true;
+        ramOffset = header.ramOffset;
+        ramSize   = header.ramSize;
+        if (!tryReadContext(header.arm9ContextOffset, header.arm9ContextSize,
+                            (void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS) ||
+            !tryReadContext(header.arm7ContextOffset, header.arm7ContextSize,
+                            (void*)SAVE_STATE_ARM7_CONTEXT_ADDRESS))
+        {
+            f_close(&file);
+            return false;
+        }
+    }
+    else if (header.magic == SAVE_STATE_FILE_MAGIC_V2 &&
         header.version == SAVE_STATE_FILE_VERSION_V2 &&
         header.ramSize == 0x400000)
     {
@@ -1120,26 +1145,13 @@ bool NdsLoader::TryRestoreSaveState()
         ramOffset = header.ramOffset;
         ramSize = header.ramSize;
 
-        if (header.arm9ContextSize == sizeof(save_state_cpu_context_t))
+        if (!tryReadContext(header.arm9ContextOffset, header.arm9ContextSize,
+                            (void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS) ||
+            !tryReadContext(header.arm7ContextOffset, header.arm7ContextSize,
+                            (void*)SAVE_STATE_ARM7_CONTEXT_ADDRESS))
         {
-            if (f_lseek(&file, header.arm9ContextOffset) != FR_OK ||
-                f_read(&file, (void*)SAVE_STATE_ARM9_CONTEXT_ADDRESS, sizeof(save_state_cpu_context_t), &bytesRead) != FR_OK ||
-                bytesRead != sizeof(save_state_cpu_context_t))
-            {
-                f_close(&file);
-                return false;
-            }
-        }
-
-        if (header.arm7ContextSize == sizeof(save_state_cpu_context_t))
-        {
-            if (f_lseek(&file, header.arm7ContextOffset) != FR_OK ||
-                f_read(&file, (void*)SAVE_STATE_ARM7_CONTEXT_ADDRESS, sizeof(save_state_cpu_context_t), &bytesRead) != FR_OK ||
-                bytesRead != sizeof(save_state_cpu_context_t))
-            {
-                f_close(&file);
-                return false;
-            }
+            f_close(&file);
+            return false;
         }
     }
     else if (header.magic == SAVE_STATE_FILE_MAGIC_V1 && header.version == 1 && header.arm9ContextOffset == 0x400000)
@@ -1174,15 +1186,30 @@ bool NdsLoader::TryRestoreSaveState()
         }
     }
 
+    // Restore palette and OAM for v3 files
+    if (header.magic == SAVE_STATE_FILE_MAGIC_V3 &&
+        header.paletteSize > 0 && header.oamSize > 0)
+    {
+        if (f_lseek(&file, header.paletteOffset) != FR_OK ||
+            f_read(&file, (void*)0x05000000, header.paletteSize, &bytesRead) != FR_OK ||
+            bytesRead != header.paletteSize)
+        {
+            LOG_ERROR("Failed to restore palette\n");
+            f_close(&file);
+            return false;
+        }
+        if (f_lseek(&file, header.oamOffset) != FR_OK ||
+            f_read(&file, (void*)0x07000000, header.oamSize, &bytesRead) != FR_OK ||
+            bytesRead != header.oamSize)
+        {
+            LOG_ERROR("Failed to restore OAM\n");
+            f_close(&file);
+            return false;
+        }
+    }
+
     f_close(&file);
-    if (!hasExplicitContexts)
-    {
-        LOG_DEBUG("Restored legacy savestate dump from %s\n", _saveStatePath);
-    }
-    else
-    {
-        LOG_DEBUG("Restored savestate dump from %s\n", _saveStatePath);
-    }
+    LOG_DEBUG("Restored savestate v%d dump from %s\n", header.version, _saveStatePath);
     return true;
 }
 

@@ -53,6 +53,9 @@ patch_vblankhotkey_handler:
     str r11, [r0], #4
     str r12, [r0], #4
 
+    // arm9 context save is already written above,
+    // palette/OAM are captured by the ARM7 dump routine via the V3 header sections
+
     ldr r0, sdk5MainMemoryCmdAddress
     mov r1, #0x54
     orr r1, r1, #0x5300

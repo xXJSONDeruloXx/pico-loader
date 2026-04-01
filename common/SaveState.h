@@ -4,6 +4,8 @@
 
 #define SAVE_STATE_FILE_MAGIC_V1   0x30535350u // PSS0
 #define SAVE_STATE_FILE_MAGIC_V2   0x31535350u // PSS1
+#define SAVE_STATE_FILE_MAGIC_V3   0x32535350u // PSS2
+#define SAVE_STATE_FILE_VERSION_V3 3u
 #define SAVE_STATE_FILE_VERSION_V2 2u
 
 struct save_state_cpu_context_t
@@ -29,6 +31,13 @@ struct save_state_file_header_t
     u32 arm7ContextSize;
     u32 ramOffset;
     u32 ramSize;
+    // v3 extensions
+    u32 vramOffset;
+    u32 vramSize;
+    u32 oamOffset;
+    u32 oamSize;
+    u32 paletteOffset;
+    u32 paletteSize;
 };
 
-static_assert(sizeof(save_state_file_header_t) == 32);
+static_assert(sizeof(save_state_file_header_t) == 56);
